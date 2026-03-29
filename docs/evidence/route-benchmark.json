@@ -1,0 +1,420 @@
+{
+  "meta": {
+    "bits": 3,
+    "group_size": 128,
+    "iterations": 1,
+    "mixed_tokens": 8192,
+    "native_fwht": {
+      "available": true,
+      "error": null,
+      "path": "/tmp/hyperquant_native/libhyperquant_fwht.so"
+    },
+    "page_size": 64,
+    "prefer_native_fwht": true,
+    "residual_topk": 1,
+    "structured_tokens": 4096,
+    "vector_count": 16384,
+    "vector_dim": 128,
+    "warmup": 0
+  },
+  "workloads": {
+    "mixed_long_context": {
+      "codecs": {
+        "context_codec": {
+          "decode_timing": {
+            "iterations": 1,
+            "max_ms": 4.107750999992277,
+            "mean_ms": 4.107750999992277,
+            "median_ms": 4.107750999992277,
+            "min_ms": 4.107750999992277,
+            "p95_ms": 4.107750999992277,
+            "stdev_ms": 0.0,
+            "warmup": 0
+          },
+          "encode_timing": {
+            "iterations": 1,
+            "max_ms": 97.86172899998746,
+            "mean_ms": 97.86172899998746,
+            "median_ms": 97.86172899998746,
+            "min_ms": 97.86172899998746,
+            "p95_ms": 97.86172899998746,
+            "stdev_ms": 0.0,
+            "warmup": 0
+          },
+          "stats": {
+            "compression_ratio": 4.5229116209052505,
+            "contour": "generic_conservative",
+            "contour_details": {
+              "contour": "generic_conservative",
+              "low_rank_fraction": 0.2734375,
+              "page_ref_fraction": 0.0390625,
+              "protected_fraction": 0.015625,
+              "reasons": [
+                "structural_fraction=0.312500 < min_structural_fraction=0.700000"
+              ],
+              "structural_fraction": 0.3125,
+              "supported": false,
+              "total_pages": 128
+            },
+            "contour_reasons": [
+              "structural_fraction=0.312500 < min_structural_fraction=0.700000"
+            ],
+            "contour_supported": false,
+            "cosine_similarity": 0.9999909400939941,
+            "guarantee_failures": [],
+            "guarantee_passed": null,
+            "guarantee_profile": null,
+            "max_abs_error": 0.04960346221923828,
+            "original_bytes": 4194304,
+            "page_mode_counts": {
+              "fp16": 25,
+              "int8": 63,
+              "low_rank": 35,
+              "page_ref": 5
+            },
+            "payload_sha256": "31a2db85568c90c13ae1804031d4003cae780ddd82a097fdee533b8d04567c57",
+            "protected_pages": 2,
+            "protected_vectors": 96,
+            "rms_error": 0.00729897478595376,
+            "route_recommendation": "conservative_codebook",
+            "serialized_bytes": 927346,
+            "storage_compression_ratio": 4.273091256588987,
+            "stored_bytes": 981562
+          }
+        },
+        "dense_rotation_baseline": {
+          "decode_timing": {
+            "iterations": 1,
+            "max_ms": 291.7672930000208,
+            "mean_ms": 291.7672930000208,
+            "median_ms": 291.7672930000208,
+            "min_ms": 291.7672930000208,
+            "p95_ms": 291.7672930000208,
+            "stdev_ms": 0.0,
+            "warmup": 0
+          },
+          "encode_timing": {
+            "iterations": 1,
+            "max_ms": 502.3175970000011,
+            "mean_ms": 502.3175970000011,
+            "median_ms": 502.3175970000011,
+            "min_ms": 502.3175970000011,
+            "p95_ms": 502.3175970000011,
+            "stdev_ms": 0.0,
+            "warmup": 0
+          },
+          "stats": {
+            "algorithm": "dense_rotation_baseline",
+            "bits": 3,
+            "compression_ratio": 12.023609745469972,
+            "cosine_similarity": 0.9853714108467102,
+            "effective_bits_per_value": 3.375,
+            "group_size": 128,
+            "max_abs_error": 2.903630256652832,
+            "native_fwht_used": false,
+            "original_bytes": 4194304,
+            "payload_sha256": "3780d6438e71b8b499dddb216ff29c2435bf4a22aff88e0d7b37728980ed1c19",
+            "residual_bits_per_value": 0.25,
+            "residual_topk": 1,
+            "rms_error": 0.3143230676651001,
+            "serialized_bytes": 348839,
+            "storage_compression_ratio": 9.47957428631483,
+            "stored_bytes": 442457,
+            "transform": "dense_qr"
+          }
+        },
+        "vector_codec": {
+          "decode_timing": {
+            "iterations": 1,
+            "max_ms": 38.58035300004303,
+            "mean_ms": 38.58035300004303,
+            "median_ms": 38.58035300004303,
+            "min_ms": 38.58035300004303,
+            "p95_ms": 38.58035300004303,
+            "stdev_ms": 0.0,
+            "warmup": 0
+          },
+          "encode_timing": {
+            "iterations": 1,
+            "max_ms": 119.426016000034,
+            "mean_ms": 119.426016000034,
+            "median_ms": 119.426016000034,
+            "min_ms": 119.426016000034,
+            "p95_ms": 119.426016000034,
+            "stdev_ms": 0.0,
+            "warmup": 0
+          },
+          "stats": {
+            "algorithm": "vector_codec",
+            "bits": 3,
+            "compression_ratio": 11.99345754841071,
+            "cosine_similarity": 0.9853226542472839,
+            "effective_bits_per_value": 3.375,
+            "group_size": 128,
+            "max_abs_error": 3.0553057193756104,
+            "native_fwht_used": true,
+            "original_bytes": 4194304,
+            "payload_sha256": "66775259cc425fb9842914e050cc12d605d5be3931bd337efcf3b430e3959a42",
+            "residual_bits_per_value": 0.25,
+            "residual_topk": 1,
+            "rms_error": 0.31487202644348145,
+            "serialized_bytes": 349716,
+            "storage_compression_ratio": 9.47942431474651,
+            "stored_bytes": 442464,
+            "transform": "structured_fwht"
+          }
+        }
+      },
+      "insight": "Highest compression ratio: `dense_rotation_baseline`. Fastest encode path: `context_codec`. All codecs were measured on the same synthetic workload with the same harness.",
+      "shape": [
+        8192,
+        128
+      ]
+    },
+    "online_vector_stream": {
+      "codecs": {
+        "dense_rotation_baseline": {
+          "decode_timing": {
+            "iterations": 1,
+            "max_ms": 188.92834700000094,
+            "mean_ms": 188.92834700000094,
+            "median_ms": 188.92834700000094,
+            "min_ms": 188.92834700000094,
+            "p95_ms": 188.92834700000094,
+            "stdev_ms": 0.0,
+            "warmup": 0
+          },
+          "encode_timing": {
+            "iterations": 1,
+            "max_ms": 799.9798089999786,
+            "mean_ms": 799.9798089999786,
+            "median_ms": 799.9798089999786,
+            "min_ms": 799.9798089999786,
+            "p95_ms": 799.9798089999786,
+            "stdev_ms": 0.0,
+            "warmup": 0
+          },
+          "stats": {
+            "algorithm": "dense_rotation_baseline",
+            "bits": 3,
+            "compression_ratio": 9.907063644845465,
+            "cosine_similarity": 0.9853299260139465,
+            "effective_bits_per_value": 3.375,
+            "group_size": 128,
+            "max_abs_error": 1.7594184875488281,
+            "native_fwht_used": false,
+            "original_bytes": 8388608,
+            "payload_sha256": "10b8e8df6e14295f9e50a0252dc31c06125fa547eceffd41754633c906b38000",
+            "residual_bits_per_value": 0.25,
+            "residual_topk": 1,
+            "rms_error": 0.13396050035953522,
+            "serialized_bytes": 846730,
+            "storage_compression_ratio": 9.480527787980675,
+            "stored_bytes": 884825,
+            "transform": "dense_qr"
+          }
+        },
+        "vector_codec": {
+          "decode_timing": {
+            "iterations": 1,
+            "max_ms": 110.63471500006017,
+            "mean_ms": 110.63471500006017,
+            "median_ms": 110.63471500006017,
+            "min_ms": 110.63471500006017,
+            "p95_ms": 110.63471500006017,
+            "stdev_ms": 0.0,
+            "warmup": 0
+          },
+          "encode_timing": {
+            "iterations": 1,
+            "max_ms": 309.6847440001511,
+            "mean_ms": 309.6847440001511,
+            "median_ms": 309.6847440001511,
+            "min_ms": 309.6847440001511,
+            "p95_ms": 309.6847440001511,
+            "stdev_ms": 0.0,
+            "warmup": 0
+          },
+          "stats": {
+            "algorithm": "vector_codec",
+            "bits": 3,
+            "compression_ratio": 9.905940535599994,
+            "cosine_similarity": 0.9853745698928833,
+            "effective_bits_per_value": 3.375,
+            "group_size": 128,
+            "max_abs_error": 1.3026971817016602,
+            "native_fwht_used": true,
+            "original_bytes": 8388608,
+            "payload_sha256": "68c7b24e72303ba2236efba0acd551f884ae1370b327fadca1ee0f275a2a756d",
+            "residual_bits_per_value": 0.25,
+            "residual_topk": 1,
+            "rms_error": 0.13376426696777344,
+            "serialized_bytes": 846826,
+            "storage_compression_ratio": 9.480452786517667,
+            "stored_bytes": 884832,
+            "transform": "structured_fwht"
+          }
+        }
+      },
+      "insight": "Highest compression ratio: `dense_rotation_baseline`. Fastest encode path: `vector_codec`. All codecs were measured on the same synthetic workload with the same harness.",
+      "shape": [
+        16384,
+        128
+      ]
+    },
+    "structured_long_context": {
+      "codecs": {
+        "context_codec": {
+          "decode_timing": {
+            "iterations": 1,
+            "max_ms": 2.7629070000330103,
+            "mean_ms": 2.7629070000330103,
+            "median_ms": 2.7629070000330103,
+            "min_ms": 2.7629070000330103,
+            "p95_ms": 2.7629070000330103,
+            "stdev_ms": 0.0,
+            "warmup": 0
+          },
+          "encode_timing": {
+            "iterations": 1,
+            "max_ms": 21.499117000075785,
+            "mean_ms": 21.499117000075785,
+            "median_ms": 21.499117000075785,
+            "min_ms": 21.499117000075785,
+            "p95_ms": 21.499117000075785,
+            "stdev_ms": 0.0,
+            "warmup": 0
+          },
+          "stats": {
+            "compression_ratio": 38.712125966810035,
+            "contour": "context_structured",
+            "contour_details": {
+              "contour": "context_structured",
+              "low_rank_fraction": 0.75,
+              "page_ref_fraction": 0.203125,
+              "protected_fraction": 0.03125,
+              "reasons": [],
+              "structural_fraction": 0.953125,
+              "supported": true,
+              "total_pages": 64
+            },
+            "contour_reasons": [],
+            "contour_supported": true,
+            "cosine_similarity": 0.9999905824661255,
+            "guarantee_failures": [],
+            "guarantee_passed": true,
+            "guarantee_profile": {
+              "max_max_abs_error": 0.05,
+              "max_rms_error": 0.01,
+              "min_compression_ratio": 30.0,
+              "min_cosine_similarity": 0.999
+            },
+            "max_abs_error": 0.03806805610656738,
+            "original_bytes": 2097152,
+            "page_mode_counts": {
+              "fp16": 0,
+              "int8": 3,
+              "low_rank": 48,
+              "page_ref": 13
+            },
+            "payload_sha256": "2c182689366ffbd6b690c26df56456eb0cc82197798926edaba880e75a85d5ab",
+            "protected_pages": 2,
+            "protected_vectors": 96,
+            "rms_error": 0.006031398195773363,
+            "route_recommendation": "context_codec",
+            "serialized_bytes": 54173,
+            "storage_compression_ratio": 36.493787630947,
+            "stored_bytes": 57466
+          }
+        },
+        "dense_rotation_baseline": {
+          "decode_timing": {
+            "iterations": 1,
+            "max_ms": 200.2576240001872,
+            "mean_ms": 200.2576240001872,
+            "median_ms": 200.2576240001872,
+            "min_ms": 200.2576240001872,
+            "p95_ms": 200.2576240001872,
+            "stdev_ms": 0.0,
+            "warmup": 0
+          },
+          "encode_timing": {
+            "iterations": 1,
+            "max_ms": 497.23328799996125,
+            "mean_ms": 497.23328799996125,
+            "median_ms": 497.23328799996125,
+            "min_ms": 497.23328799996125,
+            "p95_ms": 497.23328799996125,
+            "stdev_ms": 0.0,
+            "warmup": 0
+          },
+          "stats": {
+            "algorithm": "dense_rotation_baseline",
+            "bits": 3,
+            "compression_ratio": 25.85374032250111,
+            "cosine_similarity": 0.9853207468986511,
+            "effective_bits_per_value": 3.375,
+            "group_size": 128,
+            "max_abs_error": 2.405644655227661,
+            "native_fwht_used": false,
+            "original_bytes": 2097152,
+            "payload_sha256": "672a3f037a361659265d61ef6e0c7208267d4625731fe85aa3d814e3e2c66835",
+            "residual_bits_per_value": 0.25,
+            "residual_topk": 1,
+            "rms_error": 0.23721691966056824,
+            "serialized_bytes": 81116,
+            "storage_compression_ratio": 9.477667858256543,
+            "stored_bytes": 221273,
+            "transform": "dense_qr"
+          }
+        },
+        "vector_codec": {
+          "decode_timing": {
+            "iterations": 1,
+            "max_ms": 19.97765500004789,
+            "mean_ms": 19.97765500004789,
+            "median_ms": 19.97765500004789,
+            "min_ms": 19.97765500004789,
+            "p95_ms": 19.97765500004789,
+            "stdev_ms": 0.0,
+            "warmup": 0
+          },
+          "encode_timing": {
+            "iterations": 1,
+            "max_ms": 54.42269300010594,
+            "mean_ms": 54.42269300010594,
+            "median_ms": 54.42269300010594,
+            "min_ms": 54.42269300010594,
+            "p95_ms": 54.42269300010594,
+            "stdev_ms": 0.0,
+            "warmup": 0
+          },
+          "stats": {
+            "algorithm": "vector_codec",
+            "bits": 3,
+            "compression_ratio": 25.795544840649946,
+            "cosine_similarity": 0.9854238629341125,
+            "effective_bits_per_value": 3.375,
+            "group_size": 128,
+            "max_abs_error": 2.284809112548828,
+            "native_fwht_used": true,
+            "original_bytes": 2097152,
+            "payload_sha256": "5907cecc3256bdeb4825684eca0ef77f789d7bbf14f3eda1b80d8ea50ab9a03b",
+            "residual_bits_per_value": 0.25,
+            "residual_topk": 1,
+            "rms_error": 0.23686374723911285,
+            "serialized_bytes": 81299,
+            "storage_compression_ratio": 9.477368040491685,
+            "stored_bytes": 221280,
+            "transform": "structured_fwht"
+          }
+        }
+      },
+      "insight": "Highest compression ratio: `context_codec`. Fastest encode path: `context_codec`. All codecs were measured on the same synthetic workload with the same harness.",
+      "shape": [
+        4096,
+        128
+      ]
+    }
+  }
+}

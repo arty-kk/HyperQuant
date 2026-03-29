@@ -1,0 +1,162 @@
+# Copyright 2026 Сацук Артём Венедиктович (Satsuk Artem)
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+from __future__ import annotations
+
+import io
+
+import numpy as np
+import pytest
+
+from hyperquant.guarantee import ContourViolation, GuaranteeMode, GuaranteeViolation, ContextGuaranteeProfile
+from hyperquant.context_codec import (
+    ContextEnvelope,
+    ContextCodecConfig,
+    ContextCodec,
+)
+from hyperquant.utils import bytes_to_b64
+
+
+def build_context_like_array(
+    n_tokens: int = 4096,
+    dim: int = 128,
+    page_size: int = 64,
+) -> np.ndarray:
+    rng = np.random.default_rng(123)
+    n_pages = n_tokens // page_size
+    pages: list[np.ndarray] = []
+    templates: list[np.ndarray] = []
+
+    for _ in range(4):
+        topic = rng.standard_normal((1, dim)).astype(np.float32)
+        coeff = rng.standard_normal((page_size, 1)).astype(np.float32) * 0.7
+        basis = rng.standard_normal((1, dim)).astype(np.float32)
+        page = topic + coeff @ basis + 0.002 * rng.standard_normal((page_size, dim)).astype(np.float32)
+        templates.append(page.astype(np.float32))
+
+    for page_idx in range(n_pages):
+        if page_idx < 4:
+            pages.append(templates[page_idx])
+        elif page_idx < 16:
+            pages.append(templates[page_idx % 4].copy())
+        elif page_idx >= n_pages - 1:
+            topic = rng.standard_normal((1, dim)).astype(np.float32)
+            coeff = rng.standard_normal((page_size, 3)).astype(np.float32)
+            basis = rng.standard_normal((3, dim)).astype(np.float32)
+            page = topic + coeff @ basis + 0.03 * rng.standard_normal((page_size, dim)).astype(np.float32)
+            pages.append(page.astype(np.float32))
+        else:
+            topic = rng.standard_normal((1, dim)).astype(np.float32)
+            coeff = rng.standard_normal((page_size, 1)).astype(np.float32)
+            basis = rng.standard_normal((1, dim)).astype(np.float32)
+            page = topic + coeff @ basis + 0.008 * rng.standard_normal((page_size, dim)).astype(np.float32)
+            pages.append(page.astype(np.float32))
+
+    return np.concatenate(pages, axis=0).astype(np.float32)
+
+
+def build_random_array(n_tokens: int = 4096, dim: int = 128) -> np.ndarray:
+    rng = np.random.default_rng(999)
+    return rng.standard_normal((n_tokens, dim)).astype(np.float32)
+
+
+def test_context_roundtrip_and_ratio() -> None:
+    array = build_context_like_array()
+    compressor = ContextCodec(
+        ContextCodecConfig(
+            page_size=64,
+            rank=1,
+            prefix_keep_vectors=32,
+            suffix_keep_vectors=64,
+            low_rank_error_threshold=0.03,
+            ref_round_decimals=3,
+            enable_page_ref=True,
+        )
+    )
+
+    envelope, stats = compressor.compress(
+        array,
+        guarantee_profile=ContextGuaranteeProfile(),
+        guarantee_mode=GuaranteeMode.FAIL_CLOSED,
+    )
+    restored = compressor.decompress(envelope)
+
+    assert restored.shape == array.shape
+    assert stats.compression_ratio >= 30.0
+    assert stats.storage_compression_ratio >= 30.0
+    assert stats.cosine_similarity > 0.999
+    assert stats.guarantee_passed is True
+    assert stats.page_mode_counts["low_rank"] > 0
+    assert stats.page_mode_counts["page_ref"] > 0
+    assert "int8" in stats.page_mode_counts
+    assert stats.contour == "context_structured"
+    assert stats.contour_supported is True
+    assert stats.route_recommendation == "context_codec"
+    assert len(stats.payload_sha256) == 64
+
+    payload = envelope.to_bytes()
+    restored_envelope = ContextEnvelope.from_bytes(payload)
+    restored_again = compressor.decompress(restored_envelope)
+    np.testing.assert_allclose(restored, restored_again, rtol=0, atol=0)
+
+
+def test_context_fail_closed_rejects_non_context_like_input() -> None:
+    array = build_random_array()
+    compressor = ContextCodec(ContextCodecConfig())
+
+    with pytest.raises(ContourViolation):
+        compressor.compress(
+            array,
+            guarantee_profile=ContextGuaranteeProfile(),
+            guarantee_mode=GuaranteeMode.FAIL_CLOSED,
+        )
+
+
+def test_context_rejects_non_finite_input() -> None:
+    array = build_context_like_array()
+    array[0, 0] = np.nan
+    compressor = ContextCodec(ContextCodecConfig())
+    with pytest.raises(ValueError, match="NaN or Inf"):
+        compressor.compress(array)
+
+
+def test_context_envelope_validation_rejects_invalid_reference() -> None:
+    array = build_context_like_array()
+    compressor = ContextCodec(ContextCodecConfig())
+    envelope, _ = compressor.compress(array, guarantee_mode=GuaranteeMode.ALLOW_BEST_EFFORT)
+    raw = envelope.to_bytes()
+    loaded = np.load(io.BytesIO(raw), allow_pickle=False)
+    page_ref_indices = loaded["page_ref_indices"].astype(np.int32)
+    page_ref_indices[0] = 123
+    buffer = io.BytesIO()
+    np.savez_compressed(
+        buffer,
+        original_shape=loaded["original_shape"],
+        original_dtype=loaded["original_dtype"],
+        page_size=loaded["page_size"],
+        rank=loaded["rank"],
+        schema_version=loaded["schema_version"],
+        page_modes=loaded["page_modes"],
+        page_lengths=loaded["page_lengths"],
+        page_ref_indices=page_ref_indices,
+        low_rank_means=loaded["low_rank_means"],
+        low_rank_us=loaded["low_rank_us"],
+        low_rank_vt=loaded["low_rank_vt"],
+        int8_mins=loaded["int8_mins"],
+        int8_scales=loaded["int8_scales"],
+        int8_pages=loaded["int8_pages"],
+        fp16_pages=loaded["fp16_pages"],
+    )
+    with pytest.raises(ValueError, match="page_ref_indices"):
+        ContextEnvelope.from_base64(bytes_to_b64(buffer.getvalue()))

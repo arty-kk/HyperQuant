@@ -1,0 +1,285 @@
+{
+  "meta": {
+    "active_window_tokens": 256,
+    "bits": 3,
+    "budget_sessions": 8,
+    "concurrent_sessions": 8,
+    "date": "2026-03-29",
+    "group_size": 128,
+    "hot_pages": 8,
+    "page_size": 64,
+    "runtime_value_bytes": 2
+  },
+  "workloads": {
+    "mixed_long_context": {
+      "budget_bytes": 67108864,
+      "plan": {
+        "active_window_tokens": 256,
+        "artifact_bytes_per_session": 3181922,
+        "baseline_resident_bytes_per_session": 8388608,
+        "budget_bytes": 67108864,
+        "candidates": {
+          "baseline_full_resident": {
+            "artifact_bytes_per_session": 8388608,
+            "notes": [
+              "No compression, everything resident in RAM."
+            ],
+            "resident_bytes_per_session": 8388608,
+            "resident_ratio_vs_baseline": 1.0
+          },
+          "context_codec_full_envelope": {
+            "artifact_bytes_per_session": 3585551,
+            "compression_ratio": 4.679117937522015,
+            "contour": "generic_conservative",
+            "contour_supported": false,
+            "cosine_similarity": 0.9999903440475464,
+            "notes": [
+              "Whole-array Context envelope kept resident."
+            ],
+            "resident_bytes_per_session": 3797178,
+            "resident_ratio_vs_baseline": 0.45265889167785645,
+            "rms_error": 0.007191953249275684
+          },
+          "resident_tier": {
+            "artifact_bytes_per_session": 3181922,
+            "compression_ratio": 5.272667274684923,
+            "cosine_similarity": 0.9965636155684878,
+            "notes": [
+              "Only manifest plus hot pages are resident.",
+              "Projected hot window = 4 page(s)."
+            ],
+            "page_mode_counts": {
+              "fp16": 1,
+              "int8": 240,
+              "low_rank": 153,
+              "page_ref": 21,
+              "vector": 97
+            },
+            "resident_bytes_per_session": 252008,
+            "resident_ratio_vs_baseline": 0.03004169464111328,
+            "rms_error": 0.15231843615051643
+          },
+          "vector_codec_full_envelope": {
+            "artifact_bytes_per_session": 1374440,
+            "compression_ratio": 12.206583044730944,
+            "cosine_similarity": 0.9853153228759766,
+            "notes": [
+              "Whole-array vector-codec envelope kept resident."
+            ],
+            "resident_bytes_per_session": 1769568,
+            "resident_ratio_vs_baseline": 0.21094894409179688,
+            "rms_error": 0.3146305978298187
+          }
+        },
+        "capacity_gain_vs_baseline": 33.25,
+        "chosen_route": "resident_tier",
+        "concurrent_sessions": 8,
+        "fits_budget": true,
+        "fleet_baseline_resident_bytes": 67108864,
+        "fleet_projected_resident_bytes": 2016064,
+        "max_sessions_within_budget_baseline": 8,
+        "max_sessions_within_budget_projected": 266,
+        "notes": [
+          "Baseline assumes 2 byte(s) per runtime value.",
+          "Tiered route is selected because it minimizes resident RAM under the requested hot window.",
+          "Under the requested budget, projected session capacity changes from 8 to 266."
+        ],
+        "page_mode_counts": {
+          "fp16": 1,
+          "int8": 240,
+          "low_rank": 153,
+          "page_ref": 21,
+          "vector": 97
+        },
+        "projected_resident_bytes_per_session": 252008,
+        "resident_savings_bytes_per_session": 8136600,
+        "resident_savings_ratio": 0.9699583053588867,
+        "runtime_value_bytes": 2
+      },
+      "shape": [
+        32768,
+        128
+      ]
+    },
+    "online_vector_stream": {
+      "budget_bytes": 33554432,
+      "plan": {
+        "active_window_tokens": 256,
+        "artifact_bytes_per_session": 2383700,
+        "baseline_resident_bytes_per_session": 4194304,
+        "budget_bytes": 33554432,
+        "candidates": {
+          "baseline_full_resident": {
+            "artifact_bytes_per_session": 4194304,
+            "notes": [
+              "No compression, everything resident in RAM."
+            ],
+            "resident_bytes_per_session": 4194304,
+            "resident_ratio_vs_baseline": 1.0
+          },
+          "context_codec_full_envelope": {
+            "artifact_bytes_per_session": 2227686,
+            "compression_ratio": 3.7656150821974013,
+            "contour": "generic_conservative",
+            "contour_supported": false,
+            "cosine_similarity": 0.9999837875366211,
+            "notes": [
+              "Whole-array Context envelope kept resident."
+            ],
+            "resident_bytes_per_session": 2322746,
+            "resident_ratio_vs_baseline": 0.5537858009338379,
+            "rms_error": 0.004417319782078266
+          },
+          "resident_tier": {
+            "artifact_bytes_per_session": 2383700,
+            "compression_ratio": 3.5191542559885893,
+            "cosine_similarity": 0.9992221972206462,
+            "notes": [
+              "Only manifest plus hot pages are resident.",
+              "Projected hot window = 4 page(s)."
+            ],
+            "page_mode_counts": {
+              "fp16": 0,
+              "int8": 244,
+              "low_rank": 0,
+              "page_ref": 0,
+              "vector": 12
+            },
+            "resident_bytes_per_session": 159943,
+            "resident_ratio_vs_baseline": 0.03813338279724121,
+            "rms_error": 0.030881702188796562
+          },
+          "vector_codec_full_envelope": {
+            "artifact_bytes_per_session": 846826,
+            "compression_ratio": 9.905940535599994,
+            "cosine_similarity": 0.9853745698928833,
+            "notes": [
+              "Whole-array vector-codec envelope kept resident."
+            ],
+            "resident_bytes_per_session": 884832,
+            "resident_ratio_vs_baseline": 0.21096038818359375,
+            "rms_error": 0.13376426696777344
+          }
+        },
+        "capacity_gain_vs_baseline": 26.125,
+        "chosen_route": "resident_tier",
+        "concurrent_sessions": 8,
+        "fits_budget": true,
+        "fleet_baseline_resident_bytes": 33554432,
+        "fleet_projected_resident_bytes": 1279544,
+        "max_sessions_within_budget_baseline": 8,
+        "max_sessions_within_budget_projected": 209,
+        "notes": [
+          "Baseline assumes 2 byte(s) per runtime value.",
+          "Tiered route is selected because it minimizes resident RAM under the requested hot window.",
+          "Under the requested budget, projected session capacity changes from 8 to 209."
+        ],
+        "page_mode_counts": {
+          "fp16": 0,
+          "int8": 244,
+          "low_rank": 0,
+          "page_ref": 0,
+          "vector": 12
+        },
+        "projected_resident_bytes_per_session": 159943,
+        "resident_savings_bytes_per_session": 4034361,
+        "resident_savings_ratio": 0.9618666172027588,
+        "runtime_value_bytes": 2
+      },
+      "shape": [
+        16384,
+        128
+      ]
+    },
+    "structured_long_context": {
+      "budget_bytes": 33554432,
+      "plan": {
+        "active_window_tokens": 256,
+        "artifact_bytes_per_session": 416248,
+        "baseline_resident_bytes_per_session": 4194304,
+        "budget_bytes": 33554432,
+        "candidates": {
+          "baseline_full_resident": {
+            "artifact_bytes_per_session": 4194304,
+            "notes": [
+              "No compression, everything resident in RAM."
+            ],
+            "resident_bytes_per_session": 4194304,
+            "resident_ratio_vs_baseline": 1.0
+          },
+          "context_codec_full_envelope": {
+            "artifact_bytes_per_session": 167646,
+            "compression_ratio": 50.03762690431027,
+            "contour": "context_structured",
+            "contour_supported": true,
+            "cosine_similarity": 0.9999892711639404,
+            "notes": [
+              "Whole-array Context envelope kept resident."
+            ],
+            "resident_bytes_per_session": 182074,
+            "resident_ratio_vs_baseline": 0.04340982437133789,
+            "rms_error": 0.00666516087949276
+          },
+          "resident_tier": {
+            "artifact_bytes_per_session": 416248,
+            "compression_ratio": 20.15290884280525,
+            "cosine_similarity": 0.9999888394289344,
+            "notes": [
+              "Only manifest plus hot pages are resident.",
+              "Projected hot window = 4 page(s)."
+            ],
+            "page_mode_counts": {
+              "fp16": 0,
+              "int8": 3,
+              "low_rank": 240,
+              "page_ref": 13,
+              "vector": 0
+            },
+            "resident_bytes_per_session": 159901,
+            "resident_ratio_vs_baseline": 0.038123369216918945,
+            "rms_error": 0.006655801377916462
+          },
+          "vector_codec_full_envelope": {
+            "artifact_bytes_per_session": 366689,
+            "compression_ratio": 22.876628423541476,
+            "cosine_similarity": 0.9853620529174805,
+            "notes": [
+              "Whole-array vector-codec envelope kept resident."
+            ],
+            "resident_bytes_per_session": 884832,
+            "resident_ratio_vs_baseline": 0.21096038818359375,
+            "rms_error": 0.24084240198135376
+          }
+        },
+        "capacity_gain_vs_baseline": 26.125,
+        "chosen_route": "resident_tier",
+        "concurrent_sessions": 8,
+        "fits_budget": true,
+        "fleet_baseline_resident_bytes": 33554432,
+        "fleet_projected_resident_bytes": 1279208,
+        "max_sessions_within_budget_baseline": 8,
+        "max_sessions_within_budget_projected": 209,
+        "notes": [
+          "Baseline assumes 2 byte(s) per runtime value.",
+          "Tiered route is selected because it minimizes resident RAM under the requested hot window.",
+          "Under the requested budget, projected session capacity changes from 8 to 209."
+        ],
+        "page_mode_counts": {
+          "fp16": 0,
+          "int8": 3,
+          "low_rank": 240,
+          "page_ref": 13,
+          "vector": 0
+        },
+        "projected_resident_bytes_per_session": 159901,
+        "resident_savings_bytes_per_session": 4034403,
+        "resident_savings_ratio": 0.961876630783081,
+        "runtime_value_bytes": 2
+      },
+      "shape": [
+        16384,
+        128
+      ]
+    }
+  }
+}
