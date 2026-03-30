@@ -19,6 +19,8 @@ import numpy as np
 
 from hyperquant.live_data import generate_mixed_long_context, generate_online_vector_stream
 from hyperquant.resident_tier import ResidentTierConfig, ResidentPlanner, ResidentPageMode, ResidentTierStore
+from hyperquant.context_codec import ContextCodec
+from hyperquant.guarantee import ContourViolation
 
 
 def test_tiered_store_build_open_and_slice(tmp_path) -> None:
@@ -91,3 +93,43 @@ def test_tiered_store_detects_payload_tampering(tmp_path) -> None:
     reopened = ResidentTierStore.open(tmp_path / "store")
     with pytest.raises(ValueError, match="sha256 mismatch"):
         reopened.get_page(page.page_index)
+
+
+def test_resident_planner_keeps_expected_context_qualification_errors(monkeypatch) -> None:
+    array = generate_online_vector_stream(n_vectors=1024, dim=64, seed=20260329)
+    planner = ResidentPlanner(ResidentTierConfig(page_size=32, group_size=64, hot_pages=4, residual_topk=1))
+
+    def raise_value_error(self, array, **kwargs):  # noqa: ARG001
+        raise ValueError("not context-like")
+
+    monkeypatch.setattr(ContextCodec, "compress", raise_value_error)
+    plan = planner.plan(array, concurrent_sessions=2, active_window_tokens=64, runtime_value_bytes=2)
+    candidate = plan.candidates["context_codec_full_envelope"]
+    assert candidate["resident_bytes_per_session"] is None
+    assert candidate["error"] == "not context-like"
+
+
+def test_resident_planner_propagates_unexpected_context_errors(monkeypatch) -> None:
+    array = generate_online_vector_stream(n_vectors=1024, dim=64, seed=20260329)
+    planner = ResidentPlanner(ResidentTierConfig(page_size=32, group_size=64, hot_pages=4, residual_topk=1))
+
+    def raise_runtime_error(self, array, **kwargs):  # noqa: ARG001
+        raise RuntimeError("unexpected")
+
+    monkeypatch.setattr(ContextCodec, "compress", raise_runtime_error)
+    with pytest.raises(RuntimeError, match="unexpected"):
+        planner.plan(array, concurrent_sessions=2, active_window_tokens=64, runtime_value_bytes=2)
+
+
+def test_resident_planner_keeps_contour_qualification_errors(monkeypatch) -> None:
+    array = generate_online_vector_stream(n_vectors=1024, dim=64, seed=20260329)
+    planner = ResidentPlanner(ResidentTierConfig(page_size=32, group_size=64, hot_pages=4, residual_topk=1))
+
+    def raise_contour_violation(self, array, **kwargs):  # noqa: ARG001
+        raise ContourViolation(["contour reject"])
+
+    monkeypatch.setattr(ContextCodec, "compress", raise_contour_violation)
+    plan = planner.plan(array, concurrent_sessions=2, active_window_tokens=64, runtime_value_bytes=2)
+    candidate = plan.candidates["context_codec_full_envelope"]
+    assert candidate["resident_bytes_per_session"] is None
+    assert "contour reject" in candidate["error"]

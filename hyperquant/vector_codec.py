@@ -21,6 +21,13 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from .compat import StrEnum
+from .defaults import (
+    VECTOR_BITS_DEFAULT,
+    VECTOR_GROUP_SIZE_DEFAULT,
+    VECTOR_PREFER_NATIVE_FWHT_DEFAULT,
+    VECTOR_RESIDUAL_TOPK_DEFAULT,
+    VECTOR_ROTATION_SEED_DEFAULT,
+)
 from .native_core import fwht_rows, native_fwht_status
 from .utils import EPS, bytes_from_b64, bytes_to_b64, sha256_hex
 from .validation import ShapeLimits, validate_float_dtype, validate_numeric_finite_array, validate_shape
@@ -49,14 +56,14 @@ _NORMAL_LLOYD_MAX: dict[int, dict[str, np.ndarray]] = {
 
 @dataclass(frozen=True)
 class RotatedScalarConfig:
-    bits: int = 3
-    group_size: int = 128
+    bits: int = VECTOR_BITS_DEFAULT
+    group_size: int = VECTOR_GROUP_SIZE_DEFAULT
     rotation_kind: RotationKind = RotationKind.STRUCTURED_FWHT
-    rotation_seed: int = 17
+    rotation_seed: int = VECTOR_ROTATION_SEED_DEFAULT
     normalize: bool = True
-    prefer_native_fwht: bool = True
+    prefer_native_fwht: bool = VECTOR_PREFER_NATIVE_FWHT_DEFAULT
     profile_name: str = "vector_codec"
-    residual_topk: int = 1
+    residual_topk: int = VECTOR_RESIDUAL_TOPK_DEFAULT
 
     def validate(self) -> None:
         if self.bits not in _NORMAL_LLOYD_MAX:

@@ -24,6 +24,20 @@ from typing import Sequence
 import numpy as np
 
 from .contour import ContourAnalysis, ContourThresholds, ProductContour, analyze_context_contour
+from .defaults import (
+    CONTEXT_ENABLE_INT8_FALLBACK_DEFAULT,
+    CONTEXT_ENABLE_PAGE_REF_DEFAULT,
+    CONTEXT_INT8_MAX_ABS_THRESHOLD_DEFAULT,
+    CONTEXT_INT8_REL_RMS_THRESHOLD_DEFAULT,
+    CONTEXT_LOW_RANK_ERROR_THRESHOLD_DEFAULT,
+    CONTEXT_PAGE_REF_REL_RMS_THRESHOLD_DEFAULT,
+    CONTEXT_PAGE_SIZE_DEFAULT,
+    CONTEXT_PREFIX_KEEP_VECTORS_DEFAULT,
+    CONTEXT_RANK_DEFAULT,
+    CONTEXT_REF_ROUND_DECIMALS_DEFAULT,
+    CONTEXT_SUFFIX_KEEP_VECTORS_DEFAULT,
+    CONTEXT_TRY_INT8_FOR_PROTECTED_DEFAULT,
+)
 from .guarantee import (
     ContourViolation,
     GuaranteeMode,
@@ -44,18 +58,18 @@ class ContextPageMode(IntEnum):
 
 @dataclass(frozen=True)
 class ContextCodecConfig:
-    page_size: int = 64
-    rank: int = 1
-    prefix_keep_vectors: int = 32
-    suffix_keep_vectors: int = 64
-    low_rank_error_threshold: float = 0.03
-    ref_round_decimals: int = 3
-    enable_page_ref: bool = True
-    page_ref_rel_rms_threshold: float = 0.005
-    enable_int8_fallback: bool = True
-    try_int8_for_protected: bool = True
-    int8_rel_rms_threshold: float = 0.01
-    int8_max_abs_threshold: float = 0.05
+    page_size: int = CONTEXT_PAGE_SIZE_DEFAULT
+    rank: int = CONTEXT_RANK_DEFAULT
+    prefix_keep_vectors: int = CONTEXT_PREFIX_KEEP_VECTORS_DEFAULT
+    suffix_keep_vectors: int = CONTEXT_SUFFIX_KEEP_VECTORS_DEFAULT
+    low_rank_error_threshold: float = CONTEXT_LOW_RANK_ERROR_THRESHOLD_DEFAULT
+    ref_round_decimals: int = CONTEXT_REF_ROUND_DECIMALS_DEFAULT
+    enable_page_ref: bool = CONTEXT_ENABLE_PAGE_REF_DEFAULT
+    page_ref_rel_rms_threshold: float = CONTEXT_PAGE_REF_REL_RMS_THRESHOLD_DEFAULT
+    enable_int8_fallback: bool = CONTEXT_ENABLE_INT8_FALLBACK_DEFAULT
+    try_int8_for_protected: bool = CONTEXT_TRY_INT8_FOR_PROTECTED_DEFAULT
+    int8_rel_rms_threshold: float = CONTEXT_INT8_REL_RMS_THRESHOLD_DEFAULT
+    int8_max_abs_threshold: float = CONTEXT_INT8_MAX_ABS_THRESHOLD_DEFAULT
 
     def validate(self) -> None:
         if self.page_size <= 0:
