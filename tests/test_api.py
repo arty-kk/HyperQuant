@@ -19,57 +19,21 @@ import io
 
 import httpx
 import numpy as np
+import pytest
 
+from hyperquant.api import app as api_app
 from hyperquant.api.app import create_app
 from hyperquant.bundle import CodebookBundle
 from hyperquant.codebook import MiniBatchKMeansTrainer
 from hyperquant.config import CodebookConfig
 from hyperquant.context_codec import ContextEnvelope
 from hyperquant.utils import bytes_to_b64, ndarray_from_b64, ndarray_to_b64
+from tests.array_builders import build_context_like_array, build_random_array
 
 
 def build_demo_array() -> np.ndarray:
     rng = np.random.default_rng(42)
     return rng.standard_normal((64, 128)).astype(np.float32)
-
-
-def build_context_like_array(n_tokens: int = 4096, dim: int = 128, page_size: int = 64) -> np.ndarray:
-    rng = np.random.default_rng(123)
-    n_pages = n_tokens // page_size
-    pages: list[np.ndarray] = []
-    templates: list[np.ndarray] = []
-
-    for _ in range(4):
-        topic = rng.standard_normal((1, dim)).astype(np.float32)
-        coeff = rng.standard_normal((page_size, 1)).astype(np.float32) * 0.7
-        basis = rng.standard_normal((1, dim)).astype(np.float32)
-        page = topic + coeff @ basis + 0.002 * rng.standard_normal((page_size, dim)).astype(np.float32)
-        templates.append(page.astype(np.float32))
-
-    for page_idx in range(n_pages):
-        if page_idx < 4:
-            pages.append(templates[page_idx])
-        elif page_idx < 16:
-            pages.append(templates[page_idx % 4].copy())
-        elif page_idx >= n_pages - 1:
-            topic = rng.standard_normal((1, dim)).astype(np.float32)
-            coeff = rng.standard_normal((page_size, 3)).astype(np.float32)
-            basis = rng.standard_normal((3, dim)).astype(np.float32)
-            page = topic + coeff @ basis + 0.03 * rng.standard_normal((page_size, dim)).astype(np.float32)
-            pages.append(page.astype(np.float32))
-        else:
-            topic = rng.standard_normal((1, dim)).astype(np.float32)
-            coeff = rng.standard_normal((page_size, 1)).astype(np.float32)
-            basis = rng.standard_normal((1, dim)).astype(np.float32)
-            page = topic + coeff @ basis + 0.008 * rng.standard_normal((page_size, dim)).astype(np.float32)
-            pages.append(page.astype(np.float32))
-
-    return np.concatenate(pages, axis=0).astype(np.float32)
-
-
-def build_random_array(n_tokens: int = 4096, dim: int = 128) -> np.ndarray:
-    rng = np.random.default_rng(999)
-    return rng.standard_normal((n_tokens, dim)).astype(np.float32)
 
 
 async def _scenario_client(app, fn):
@@ -295,5 +259,56 @@ def test_api_resident_plan_endpoint(tmp_path) -> None:
         assert metrics.status_code == 200
         assert 'endpoint="resident_plan"' in metrics.text
         assert "hyperquant_last_projected_resident_ratio" in metrics.text
+
+    asyncio.run(_scenario_client(app, scenario))
+
+
+def test_api_returns_500_for_internal_worker_error(tmp_path, monkeypatch) -> None:
+    array = build_demo_array()
+    trainer = MiniBatchKMeansTrainer(CodebookConfig(chunk_size=32, codebook_size=32, sample_size=1024, training_iterations=4))
+    bundle = trainer.train(array)
+    bundle_path = tmp_path / "bundle.npz"
+    bundle.save(bundle_path)
+
+    def raising_ndarray_from_b64(*args, **kwargs):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(api_app, "ndarray_from_b64", raising_ndarray_from_b64)
+    app = create_app(bundle_path, max_request_bytes=4 * 1024 * 1024)
+
+    async def scenario(client: httpx.AsyncClient) -> None:
+        response = await client.post(
+            "/v1/codebook/compress",
+            json={"array_b64": ndarray_to_b64(array)},
+        )
+        assert response.status_code == 500
+        assert response.json()["detail"] == "internal server error"
+        metrics = await client.get("/metrics")
+        assert 'endpoint="compress",reason="internal_error"' in metrics.text
+
+    asyncio.run(_scenario_client(app, scenario))
+
+
+@pytest.mark.parametrize("headers", [{}, {"content-length": "invalid"}, {"content-length": "10"}])
+def test_api_rejects_oversized_body_without_reliable_content_length(tmp_path, headers) -> None:
+    array = build_demo_array()
+    trainer = MiniBatchKMeansTrainer(CodebookConfig(chunk_size=32, codebook_size=32, sample_size=1024, training_iterations=4))
+    bundle = trainer.train(array)
+    bundle_path = tmp_path / "bundle.npz"
+    bundle.save(bundle_path)
+    app = create_app(bundle_path, max_request_bytes=1024)
+
+    oversized_payload = b'{"array_b64":"' + (b"A" * (2 * 1024 * 1024)) + b'"}'
+
+    async def scenario(client: httpx.AsyncClient) -> None:
+        async def stream():
+            midpoint = len(oversized_payload) // 2
+            yield oversized_payload[:midpoint]
+            yield oversized_payload[midpoint:]
+
+        request_headers = {"content-type": "application/json", **headers}
+        response = await client.post("/v1/codebook/compress", content=stream(), headers=request_headers)
+        assert response.status_code == 413
+        assert "max_http_body_bytes" in response.json()["detail"]
 
     asyncio.run(_scenario_client(app, scenario))

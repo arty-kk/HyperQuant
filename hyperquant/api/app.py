@@ -54,6 +54,78 @@ DEFAULT_MAX_REQUEST_BYTES = 64 * 1024 * 1024
 DEFAULT_MAX_HTTP_BODY_OVERHEAD_BYTES = 1024 * 1024
 
 
+class _BodySizeLimitMiddleware:
+    def __init__(self, app, *, max_http_body_bytes: int, metrics: HyperQuantMetrics) -> None:
+        self.app = app
+        self.max_http_body_bytes = int(max_http_body_bytes)
+        self.metrics = metrics
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        body_too_large_detail = f"request body exceeds max_http_body_bytes={self.max_http_body_bytes}"
+        for key, value in scope.get("headers", []):
+            if key.lower() != b"content-length":
+                continue
+            try:
+                declared = int(value.decode("latin1"))
+            except ValueError:
+                declared = None
+            if declared is not None and declared > self.max_http_body_bytes:
+                self.metrics.observe_error("http", "request_too_large")
+                await JSONResponse(status_code=413, content={"detail": body_too_large_detail})(scope, receive, send)
+                return
+
+        seen = 0
+        too_large = False
+        sent_too_large_response = False
+        request_stream_ended = False
+
+        async def drain_remaining_body() -> None:
+            nonlocal request_stream_ended
+            while True:
+                message = await receive()
+                if message.get("type") != "http.request":
+                    return
+                request_stream_ended = not message.get("more_body", False)
+                if not message.get("more_body", False):
+                    return
+
+        async def guarded_receive():
+            nonlocal seen, too_large, request_stream_ended
+            message = await receive()
+            if too_large:
+                return {"type": "http.request", "body": b"", "more_body": False}
+            if message.get("type") == "http.request":
+                request_stream_ended = not message.get("more_body", False)
+                seen += len(message.get("body", b""))
+                if seen > self.max_http_body_bytes:
+                    too_large = True
+                    return {"type": "http.request", "body": b"", "more_body": False}
+            return message
+
+        async def guarded_send(message):
+            nonlocal sent_too_large_response
+            if too_large:
+                if not sent_too_large_response:
+                    sent_too_large_response = True
+                    if not request_stream_ended:
+                        await drain_remaining_body()
+                    self.metrics.observe_error("http", "request_too_large")
+                    await JSONResponse(status_code=413, content={"detail": body_too_large_detail})(scope, receive, send)
+                return
+            await send(message)
+
+        await self.app(scope, guarded_receive, guarded_send)
+        if too_large and not sent_too_large_response:
+            if not request_stream_ended:
+                await drain_remaining_body()
+            self.metrics.observe_error("http", "request_too_large")
+            await JSONResponse(status_code=413, content={"detail": body_too_large_detail})(scope, receive, send)
+
+
 def _pydantic_model_to_dict(model) -> dict:
     if hasattr(model, "model_dump"):
         return model.model_dump()
@@ -148,22 +220,10 @@ def create_app(
     app.state.max_request_bytes = max_request_bytes
     app.state.max_http_body_bytes = max_http_body_bytes
     app.state.max_concurrency = resolved_max_concurrency
+    app.add_middleware(_BodySizeLimitMiddleware, max_http_body_bytes=max_http_body_bytes, metrics=metrics)
 
-    @app.middleware("http")
-    async def enforce_content_length(request, call_next):
-        content_length = request.headers.get("content-length")
-        if content_length is not None:
-            try:
-                size = int(content_length)
-            except ValueError:
-                size = None
-            if size is not None and size > max_http_body_bytes:
-                metrics.observe_error("http", "request_too_large")
-                return JSONResponse(
-                    status_code=413,
-                    content={"detail": f"request body exceeds max_http_body_bytes={max_http_body_bytes}"},
-                )
-        return await call_next(request)
+    def internal_server_error(_exc: Exception) -> HTTPException:
+        return HTTPException(status_code=500, detail="internal server error")
 
     @app.get("/healthz", response_model=HealthResponse)
     async def healthz() -> HealthResponse:
@@ -205,7 +265,7 @@ def create_app(
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except Exception as exc:  # pragma: no cover - FastAPI behavior tested through endpoint
             metrics.observe_error("compress", "internal_error")
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+            raise internal_server_error(exc) from exc
         metrics.observe_compress(stats, latency_seconds=time.perf_counter() - started)
         return CodebookCompressResponse(
             envelope_b64=envelope.to_base64(),
@@ -227,7 +287,7 @@ def create_app(
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except Exception as exc:  # pragma: no cover
             metrics.observe_error("decompress", "internal_error")
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+            raise internal_server_error(exc) from exc
         metrics.observe_decompress(latency_seconds=time.perf_counter() - started)
         return DecompressResponse(array_b64=ndarray_to_b64(restored))
 
@@ -247,7 +307,7 @@ def create_app(
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except Exception as exc:  # pragma: no cover
             metrics.observe_error("vector_compress", "internal_error")
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+            raise internal_server_error(exc) from exc
         metrics.observe_vector_compress(stats, latency_seconds=time.perf_counter() - started)
         return VectorCompressResponse(
             envelope_b64=envelope.to_base64(),
@@ -270,7 +330,7 @@ def create_app(
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except Exception as exc:  # pragma: no cover
             metrics.observe_error("vector_decompress", "internal_error")
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+            raise internal_server_error(exc) from exc
         metrics.observe_vector_decompress(latency_seconds=time.perf_counter() - started)
         return DecompressResponse(array_b64=ndarray_to_b64(restored))
 
@@ -316,7 +376,7 @@ def create_app(
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except Exception as exc:  # pragma: no cover
             metrics.observe_error("resident_plan", "internal_error")
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+            raise internal_server_error(exc) from exc
         metrics.observe_resident_plan(plan, latency_seconds=time.perf_counter() - started)
         return ResidentPlanResponse(plan=plan.to_dict())
 
@@ -370,7 +430,7 @@ def create_app(
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except Exception as exc:  # pragma: no cover
             metrics.observe_error("context_compress", "internal_error")
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+            raise internal_server_error(exc) from exc
         metrics.observe_context_compress(stats, latency_seconds=time.perf_counter() - started)
         return ContextCompressResponse(
             envelope_b64=envelope.to_base64(),
@@ -395,7 +455,7 @@ def create_app(
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except Exception as exc:  # pragma: no cover
             metrics.observe_error("context_decompress", "internal_error")
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+            raise internal_server_error(exc) from exc
         metrics.observe_context_decompress(latency_seconds=time.perf_counter() - started)
         return DecompressResponse(array_b64=ndarray_to_b64(restored))
 

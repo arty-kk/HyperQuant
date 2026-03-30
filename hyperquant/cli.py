@@ -48,6 +48,25 @@ from .context_codec import (
     ContextCodecConfig,
     ContextCodec,
 )
+from .defaults import (
+    CONTEXT_INT8_MAX_ABS_THRESHOLD_DEFAULT,
+    CONTEXT_INT8_REL_RMS_THRESHOLD_DEFAULT,
+    CONTEXT_LOW_RANK_ERROR_THRESHOLD_DEFAULT,
+    CONTEXT_PAGE_REF_REL_RMS_THRESHOLD_DEFAULT,
+    CONTEXT_PAGE_SIZE_DEFAULT,
+    CONTEXT_PREFIX_KEEP_VECTORS_DEFAULT,
+    CONTEXT_RANK_DEFAULT,
+    CONTEXT_REF_ROUND_DECIMALS_DEFAULT,
+    CONTEXT_SUFFIX_KEEP_VECTORS_DEFAULT,
+    RESIDENT_ACTIVE_WINDOW_TOKENS_DEFAULT,
+    RESIDENT_CONCURRENT_SESSIONS_DEFAULT,
+    RESIDENT_HOT_PAGES_DEFAULT,
+    RESIDENT_RUNTIME_VALUE_BYTES_DEFAULT,
+    VECTOR_BITS_DEFAULT,
+    VECTOR_GROUP_SIZE_DEFAULT,
+    VECTOR_RESIDUAL_TOPK_DEFAULT,
+    VECTOR_ROTATION_SEED_DEFAULT,
+)
 from .resident_tier import (
     ResidentTierConfig,
     ResidentPlanner,
@@ -206,7 +225,7 @@ def cmd_context_compress_file(args: argparse.Namespace) -> int:
 
 def cmd_context_decompress_file(args: argparse.Namespace) -> int:
     envelope = ContextEnvelope.from_bytes(Path(args.input).read_bytes())
-    compressor = ContextCodec(_build_context_config(args))
+    compressor = ContextCodec(ContextCodecConfig(page_size=envelope.page_size, rank=envelope.rank))
     restored = compressor.decompress(envelope)
     np.save(args.output, restored, allow_pickle=False)
     print(f"saved reconstructed array to {args.output}")
@@ -474,18 +493,18 @@ def cmd_serve(args: argparse.Namespace) -> int:
 
 
 def _add_context_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--page-size", type=int, default=64)
-    parser.add_argument("--rank", type=int, default=1)
-    parser.add_argument("--prefix-keep-vectors", type=int, default=32)
-    parser.add_argument("--suffix-keep-vectors", type=int, default=64)
-    parser.add_argument("--low-rank-error-threshold", type=float, default=0.03)
-    parser.add_argument("--ref-round-decimals", type=int, default=3)
-    parser.add_argument("--page-ref-rel-rms-threshold", type=float, default=0.005)
+    parser.add_argument("--page-size", type=int, default=CONTEXT_PAGE_SIZE_DEFAULT)
+    parser.add_argument("--rank", type=int, default=CONTEXT_RANK_DEFAULT)
+    parser.add_argument("--prefix-keep-vectors", type=int, default=CONTEXT_PREFIX_KEEP_VECTORS_DEFAULT)
+    parser.add_argument("--suffix-keep-vectors", type=int, default=CONTEXT_SUFFIX_KEEP_VECTORS_DEFAULT)
+    parser.add_argument("--low-rank-error-threshold", type=float, default=CONTEXT_LOW_RANK_ERROR_THRESHOLD_DEFAULT)
+    parser.add_argument("--ref-round-decimals", type=int, default=CONTEXT_REF_ROUND_DECIMALS_DEFAULT)
+    parser.add_argument("--page-ref-rel-rms-threshold", type=float, default=CONTEXT_PAGE_REF_REL_RMS_THRESHOLD_DEFAULT)
     parser.add_argument("--disable-page-ref", action="store_true")
     parser.add_argument("--disable-int8-fallback", action="store_true")
     parser.add_argument("--disable-int8-for-protected", action="store_true")
-    parser.add_argument("--int8-rel-rms-threshold", type=float, default=0.01)
-    parser.add_argument("--int8-max-abs-threshold", type=float, default=0.05)
+    parser.add_argument("--int8-rel-rms-threshold", type=float, default=CONTEXT_INT8_REL_RMS_THRESHOLD_DEFAULT)
+    parser.add_argument("--int8-max-abs-threshold", type=float, default=CONTEXT_INT8_MAX_ABS_THRESHOLD_DEFAULT)
 
 
 
@@ -506,10 +525,10 @@ def _add_timing_args(parser: argparse.ArgumentParser) -> None:
 
 
 def _add_vector_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--bits", type=int, default=3)
-    parser.add_argument("--group-size", type=int, default=128)
-    parser.add_argument("--rotation-seed", type=int, default=17)
-    parser.add_argument("--residual-topk", type=int, default=1, help="Number of rotated coefficients per group stored exactly as a residual rescue side-channel.")
+    parser.add_argument("--bits", type=int, default=VECTOR_BITS_DEFAULT)
+    parser.add_argument("--group-size", type=int, default=VECTOR_GROUP_SIZE_DEFAULT)
+    parser.add_argument("--rotation-seed", type=int, default=VECTOR_ROTATION_SEED_DEFAULT)
+    parser.add_argument("--residual-topk", type=int, default=VECTOR_RESIDUAL_TOPK_DEFAULT, help="Number of rotated coefficients per group stored exactly as a residual rescue side-channel.")
     parser.add_argument("--disable-native-fwht", action="store_true")
 
 
@@ -517,7 +536,7 @@ def _add_vector_args(parser: argparse.ArgumentParser) -> None:
 def _add_resident_tier_args(parser: argparse.ArgumentParser) -> None:
     _add_context_args(parser)
     _add_vector_args(parser)
-    parser.add_argument("--hot-pages", type=int, default=8)
+    parser.add_argument("--hot-pages", type=int, default=RESIDENT_HOT_PAGES_DEFAULT)
     parser.add_argument("--allow-vector-for-protected", action="store_true")
 
 
@@ -611,7 +630,6 @@ def build_parser() -> argparse.ArgumentParser:
     context_decompress = sub.add_parser("context-decompress-file")
     context_decompress.add_argument("--input", required=True)
     context_decompress.add_argument("--output", required=True)
-    _add_context_args(context_decompress)
     context_decompress.set_defaults(func=cmd_context_decompress_file)
 
     context_benchmark = sub.add_parser("context-benchmark")
@@ -643,9 +661,9 @@ def build_parser() -> argparse.ArgumentParser:
     resident_plan = sub.add_parser("resident-plan")
     resident_plan.add_argument("--input", required=True)
     resident_plan.add_argument("--output")
-    resident_plan.add_argument("--concurrent-sessions", type=int, default=8)
-    resident_plan.add_argument("--active-window-tokens", type=int, default=256)
-    resident_plan.add_argument("--runtime-value-bytes", type=int, default=2)
+    resident_plan.add_argument("--concurrent-sessions", type=int, default=RESIDENT_CONCURRENT_SESSIONS_DEFAULT)
+    resident_plan.add_argument("--active-window-tokens", type=int, default=RESIDENT_ACTIVE_WINDOW_TOKENS_DEFAULT)
+    resident_plan.add_argument("--runtime-value-bytes", type=int, default=RESIDENT_RUNTIME_VALUE_BYTES_DEFAULT)
     resident_plan.add_argument("--budget-bytes", type=int)
     _add_resident_tier_args(resident_plan)
     resident_plan.set_defaults(func=cmd_resident_plan)
@@ -673,9 +691,9 @@ def build_parser() -> argparse.ArgumentParser:
     resident_benchmark.add_argument("--structured-tokens", type=int, default=16384)
     resident_benchmark.add_argument("--mixed-tokens", type=int, default=32768)
     resident_benchmark.add_argument("--dim", type=int, default=128)
-    resident_benchmark.add_argument("--concurrent-sessions", type=int, default=8)
-    resident_benchmark.add_argument("--active-window-tokens", type=int, default=256)
-    resident_benchmark.add_argument("--runtime-value-bytes", type=int, default=2)
+    resident_benchmark.add_argument("--concurrent-sessions", type=int, default=RESIDENT_CONCURRENT_SESSIONS_DEFAULT)
+    resident_benchmark.add_argument("--active-window-tokens", type=int, default=RESIDENT_ACTIVE_WINDOW_TOKENS_DEFAULT)
+    resident_benchmark.add_argument("--runtime-value-bytes", type=int, default=RESIDENT_RUNTIME_VALUE_BYTES_DEFAULT)
     resident_benchmark.add_argument("--slice-iterations", type=int, default=5)
     resident_benchmark.add_argument("--seed", type=int, default=20260329)
     resident_benchmark.add_argument("--json-output")

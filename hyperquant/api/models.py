@@ -18,6 +18,31 @@ from typing import List, Literal
 
 from pydantic import BaseModel, Field
 
+from ..defaults import (
+    CONTEXT_ENABLE_INT8_FALLBACK_DEFAULT,
+    CONTEXT_ENABLE_PAGE_REF_DEFAULT,
+    CONTEXT_INT8_MAX_ABS_THRESHOLD_DEFAULT,
+    CONTEXT_INT8_REL_RMS_THRESHOLD_DEFAULT,
+    CONTEXT_LOW_RANK_ERROR_THRESHOLD_DEFAULT,
+    CONTEXT_PAGE_REF_REL_RMS_THRESHOLD_DEFAULT,
+    CONTEXT_PAGE_SIZE_DEFAULT,
+    CONTEXT_PREFIX_KEEP_VECTORS_DEFAULT,
+    CONTEXT_RANK_DEFAULT,
+    CONTEXT_REF_ROUND_DECIMALS_DEFAULT,
+    CONTEXT_SUFFIX_KEEP_VECTORS_DEFAULT,
+    CONTEXT_TRY_INT8_FOR_PROTECTED_DEFAULT,
+    RESIDENT_ACTIVE_WINDOW_TOKENS_DEFAULT,
+    RESIDENT_ALLOW_VECTOR_FOR_PROTECTED_DEFAULT,
+    RESIDENT_CONCURRENT_SESSIONS_DEFAULT,
+    RESIDENT_HOT_PAGES_DEFAULT,
+    RESIDENT_RUNTIME_VALUE_BYTES_DEFAULT,
+    VECTOR_BITS_DEFAULT,
+    VECTOR_GROUP_SIZE_DEFAULT,
+    VECTOR_PREFER_NATIVE_FWHT_DEFAULT,
+    VECTOR_RESIDUAL_TOPK_DEFAULT,
+    VECTOR_ROTATION_SEED_DEFAULT,
+)
+
 
 class CodebookCompressRequest(BaseModel):
     array_b64: str = Field(..., description="Base64-encoded .npy payload.")
@@ -30,11 +55,11 @@ class DecompressRequest(BaseModel):
 
 class VectorCompressRequest(BaseModel):
     array_b64: str = Field(..., description="Base64-encoded .npy payload.")
-    bits: int = Field(default=3, ge=2, le=4)
-    group_size: int = Field(default=128, gt=0)
-    rotation_seed: int = Field(default=17)
-    residual_topk: int = Field(default=1, ge=0)
-    prefer_native_fwht: bool = True
+    bits: int = Field(default=VECTOR_BITS_DEFAULT, ge=2, le=4)
+    group_size: int = Field(default=VECTOR_GROUP_SIZE_DEFAULT, gt=0)
+    rotation_seed: int = Field(default=VECTOR_ROTATION_SEED_DEFAULT)
+    residual_topk: int = Field(default=VECTOR_RESIDUAL_TOPK_DEFAULT, ge=0)
+    prefer_native_fwht: bool = VECTOR_PREFER_NATIVE_FWHT_DEFAULT
 
 
 class ContextGuaranteeModel(BaseModel):
@@ -47,18 +72,18 @@ class ContextGuaranteeModel(BaseModel):
 class ContextCompressRequest(BaseModel):
     array_b64: str = Field(..., description="Base64-encoded .npy payload.")
     protected_vector_indices: List[int] = Field(default_factory=list)
-    page_size: int = Field(default=64, gt=0)
-    rank: int = Field(default=1, gt=0)
-    prefix_keep_vectors: int = Field(default=32, ge=0)
-    suffix_keep_vectors: int = Field(default=64, ge=0)
-    low_rank_error_threshold: float = Field(default=0.03, ge=0.0)
-    ref_round_decimals: int = Field(default=3, ge=0)
-    enable_page_ref: bool = True
-    page_ref_rel_rms_threshold: float = Field(default=0.005, ge=0.0)
-    enable_int8_fallback: bool = True
-    try_int8_for_protected: bool = True
-    int8_rel_rms_threshold: float = Field(default=0.01, ge=0.0)
-    int8_max_abs_threshold: float = Field(default=0.05, ge=0.0)
+    page_size: int = Field(default=CONTEXT_PAGE_SIZE_DEFAULT, gt=0)
+    rank: int = Field(default=CONTEXT_RANK_DEFAULT, gt=0)
+    prefix_keep_vectors: int = Field(default=CONTEXT_PREFIX_KEEP_VECTORS_DEFAULT, ge=0)
+    suffix_keep_vectors: int = Field(default=CONTEXT_SUFFIX_KEEP_VECTORS_DEFAULT, ge=0)
+    low_rank_error_threshold: float = Field(default=CONTEXT_LOW_RANK_ERROR_THRESHOLD_DEFAULT, ge=0.0)
+    ref_round_decimals: int = Field(default=CONTEXT_REF_ROUND_DECIMALS_DEFAULT, ge=0)
+    enable_page_ref: bool = CONTEXT_ENABLE_PAGE_REF_DEFAULT
+    page_ref_rel_rms_threshold: float = Field(default=CONTEXT_PAGE_REF_REL_RMS_THRESHOLD_DEFAULT, ge=0.0)
+    enable_int8_fallback: bool = CONTEXT_ENABLE_INT8_FALLBACK_DEFAULT
+    try_int8_for_protected: bool = CONTEXT_TRY_INT8_FOR_PROTECTED_DEFAULT
+    int8_rel_rms_threshold: float = Field(default=CONTEXT_INT8_REL_RMS_THRESHOLD_DEFAULT, ge=0.0)
+    int8_max_abs_threshold: float = Field(default=CONTEXT_INT8_MAX_ABS_THRESHOLD_DEFAULT, ge=0.0)
     fail_closed: bool = True
     guarantee: ContextGuaranteeModel | None = None
 
@@ -120,29 +145,29 @@ class ContextCompressionStatsModel(BaseModel):
 
 class ResidentPlanRequest(BaseModel):
     array_b64: str = Field(..., description="Base64-encoded .npy payload.")
-    concurrent_sessions: int = Field(default=8, gt=0)
-    active_window_tokens: int = Field(default=256, gt=0)
-    runtime_value_bytes: int = Field(default=2, gt=0)
+    concurrent_sessions: int = Field(default=RESIDENT_CONCURRENT_SESSIONS_DEFAULT, gt=0)
+    active_window_tokens: int = Field(default=RESIDENT_ACTIVE_WINDOW_TOKENS_DEFAULT, gt=0)
+    runtime_value_bytes: int = Field(default=RESIDENT_RUNTIME_VALUE_BYTES_DEFAULT, gt=0)
     budget_bytes: int | None = Field(default=None, gt=0)
-    page_size: int = Field(default=64, gt=0)
-    rank: int = Field(default=1, gt=0)
-    bits: int = Field(default=3, ge=2, le=4)
-    group_size: int = Field(default=128, gt=0)
-    hot_pages: int = Field(default=8, gt=0)
-    rotation_seed: int = Field(default=17)
-    residual_topk: int = Field(default=1, ge=0)
-    prefix_keep_vectors: int = Field(default=32, ge=0)
-    suffix_keep_vectors: int = Field(default=64, ge=0)
-    low_rank_error_threshold: float = Field(default=0.03, ge=0.0)
-    ref_round_decimals: int = Field(default=3, ge=0)
-    enable_page_ref: bool = True
-    page_ref_rel_rms_threshold: float = Field(default=0.005, ge=0.0)
-    enable_int8_fallback: bool = True
-    try_int8_for_protected: bool = True
-    int8_rel_rms_threshold: float = Field(default=0.01, ge=0.0)
-    int8_max_abs_threshold: float = Field(default=0.05, ge=0.0)
-    prefer_native_fwht: bool = True
-    allow_vector_for_protected: bool = False
+    page_size: int = Field(default=CONTEXT_PAGE_SIZE_DEFAULT, gt=0)
+    rank: int = Field(default=CONTEXT_RANK_DEFAULT, gt=0)
+    bits: int = Field(default=VECTOR_BITS_DEFAULT, ge=2, le=4)
+    group_size: int = Field(default=VECTOR_GROUP_SIZE_DEFAULT, gt=0)
+    hot_pages: int = Field(default=RESIDENT_HOT_PAGES_DEFAULT, gt=0)
+    rotation_seed: int = Field(default=VECTOR_ROTATION_SEED_DEFAULT)
+    residual_topk: int = Field(default=VECTOR_RESIDUAL_TOPK_DEFAULT, ge=0)
+    prefix_keep_vectors: int = Field(default=CONTEXT_PREFIX_KEEP_VECTORS_DEFAULT, ge=0)
+    suffix_keep_vectors: int = Field(default=CONTEXT_SUFFIX_KEEP_VECTORS_DEFAULT, ge=0)
+    low_rank_error_threshold: float = Field(default=CONTEXT_LOW_RANK_ERROR_THRESHOLD_DEFAULT, ge=0.0)
+    ref_round_decimals: int = Field(default=CONTEXT_REF_ROUND_DECIMALS_DEFAULT, ge=0)
+    enable_page_ref: bool = CONTEXT_ENABLE_PAGE_REF_DEFAULT
+    page_ref_rel_rms_threshold: float = Field(default=CONTEXT_PAGE_REF_REL_RMS_THRESHOLD_DEFAULT, ge=0.0)
+    enable_int8_fallback: bool = CONTEXT_ENABLE_INT8_FALLBACK_DEFAULT
+    try_int8_for_protected: bool = CONTEXT_TRY_INT8_FOR_PROTECTED_DEFAULT
+    int8_rel_rms_threshold: float = Field(default=CONTEXT_INT8_REL_RMS_THRESHOLD_DEFAULT, ge=0.0)
+    int8_max_abs_threshold: float = Field(default=CONTEXT_INT8_MAX_ABS_THRESHOLD_DEFAULT, ge=0.0)
+    prefer_native_fwht: bool = VECTOR_PREFER_NATIVE_FWHT_DEFAULT
+    allow_vector_for_protected: bool = RESIDENT_ALLOW_VECTOR_FOR_PROTECTED_DEFAULT
 
 
 class ResidentPlanResponse(BaseModel):

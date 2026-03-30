@@ -26,7 +26,28 @@ from typing import Sequence
 
 import numpy as np
 
-from .guarantee import GuaranteeMode
+from .defaults import (
+    CONTEXT_ENABLE_INT8_FALLBACK_DEFAULT,
+    CONTEXT_ENABLE_PAGE_REF_DEFAULT,
+    CONTEXT_INT8_MAX_ABS_THRESHOLD_DEFAULT,
+    CONTEXT_INT8_REL_RMS_THRESHOLD_DEFAULT,
+    CONTEXT_LOW_RANK_ERROR_THRESHOLD_DEFAULT,
+    CONTEXT_PAGE_REF_REL_RMS_THRESHOLD_DEFAULT,
+    CONTEXT_PAGE_SIZE_DEFAULT,
+    CONTEXT_PREFIX_KEEP_VECTORS_DEFAULT,
+    CONTEXT_RANK_DEFAULT,
+    CONTEXT_REF_ROUND_DECIMALS_DEFAULT,
+    CONTEXT_SUFFIX_KEEP_VECTORS_DEFAULT,
+    CONTEXT_TRY_INT8_FOR_PROTECTED_DEFAULT,
+    RESIDENT_ALLOW_VECTOR_FOR_PROTECTED_DEFAULT,
+    RESIDENT_HOT_PAGES_DEFAULT,
+    VECTOR_BITS_DEFAULT,
+    VECTOR_GROUP_SIZE_DEFAULT,
+    VECTOR_PREFER_NATIVE_FWHT_DEFAULT,
+    VECTOR_RESIDUAL_TOPK_DEFAULT,
+    VECTOR_ROTATION_SEED_DEFAULT,
+)
+from .guarantee import ContourViolation, GuaranteeMode, GuaranteeViolation
 from .context_codec import ContextCodecConfig, ContextCodec
 from .vector_codec import VectorCodec
 from .utils import sha256_hex
@@ -43,25 +64,25 @@ class ResidentPageMode(StrEnum):
 
 @dataclass(frozen=True)
 class ResidentTierConfig:
-    page_size: int = 64
-    rank: int = 1
-    bits: int = 3
-    group_size: int = 128
-    rotation_seed: int = 17
-    residual_topk: int = 1
-    hot_pages: int = 8
-    prefix_keep_vectors: int = 32
-    suffix_keep_vectors: int = 64
-    low_rank_error_threshold: float = 0.03
-    ref_round_decimals: int = 3
-    enable_page_ref: bool = True
-    page_ref_rel_rms_threshold: float = 0.005
-    enable_int8_fallback: bool = True
-    try_int8_for_protected: bool = True
-    int8_rel_rms_threshold: float = 0.01
-    int8_max_abs_threshold: float = 0.05
-    prefer_native_fwht: bool = True
-    allow_vector_for_protected: bool = False
+    page_size: int = CONTEXT_PAGE_SIZE_DEFAULT
+    rank: int = CONTEXT_RANK_DEFAULT
+    bits: int = VECTOR_BITS_DEFAULT
+    group_size: int = VECTOR_GROUP_SIZE_DEFAULT
+    rotation_seed: int = VECTOR_ROTATION_SEED_DEFAULT
+    residual_topk: int = VECTOR_RESIDUAL_TOPK_DEFAULT
+    hot_pages: int = RESIDENT_HOT_PAGES_DEFAULT
+    prefix_keep_vectors: int = CONTEXT_PREFIX_KEEP_VECTORS_DEFAULT
+    suffix_keep_vectors: int = CONTEXT_SUFFIX_KEEP_VECTORS_DEFAULT
+    low_rank_error_threshold: float = CONTEXT_LOW_RANK_ERROR_THRESHOLD_DEFAULT
+    ref_round_decimals: int = CONTEXT_REF_ROUND_DECIMALS_DEFAULT
+    enable_page_ref: bool = CONTEXT_ENABLE_PAGE_REF_DEFAULT
+    page_ref_rel_rms_threshold: float = CONTEXT_PAGE_REF_REL_RMS_THRESHOLD_DEFAULT
+    enable_int8_fallback: bool = CONTEXT_ENABLE_INT8_FALLBACK_DEFAULT
+    try_int8_for_protected: bool = CONTEXT_TRY_INT8_FOR_PROTECTED_DEFAULT
+    int8_rel_rms_threshold: float = CONTEXT_INT8_REL_RMS_THRESHOLD_DEFAULT
+    int8_max_abs_threshold: float = CONTEXT_INT8_MAX_ABS_THRESHOLD_DEFAULT
+    prefer_native_fwht: bool = VECTOR_PREFER_NATIVE_FWHT_DEFAULT
+    allow_vector_for_protected: bool = RESIDENT_ALLOW_VECTOR_FOR_PROTECTED_DEFAULT
 
     def validate(self) -> None:
         if self.page_size <= 0:
@@ -882,7 +903,7 @@ class ResidentPlanner:
         context_error = None
         try:
             _, context_stats = self._context.compress(validated, guarantee_mode=GuaranteeMode.ALLOW_BEST_EFFORT)
-        except Exception as exc:
+        except (ValueError, ContourViolation, GuaranteeViolation) as exc:
             context_error = str(exc)
 
         candidates: dict[str, dict[str, object]] = {
