@@ -16,6 +16,7 @@ from hyperquant.bundle import CodebookBundle
 from hyperquant.codebook import MiniBatchKMeansTrainer
 from hyperquant.config import CodebookConfig
 from hyperquant.context_codec import ContextEnvelope
+from hyperquant.vector_codec import VectorCodec
 from hyperquant.utils import bytes_to_b64, ndarray_from_b64, ndarray_to_b64
 from tests.array_builders import build_context_like_array, build_random_array
 
@@ -229,6 +230,7 @@ def test_api_resident_plan_endpoint(tmp_path) -> None:
             "/v1/resident/plan",
             json={
                 "array_b64": ndarray_to_b64(array),
+                "protected_vector_indices": [0, 1, 2],
                 "concurrent_sessions": 4,
                 "active_window_tokens": 64,
                 "runtime_value_bytes": 2,
@@ -243,11 +245,38 @@ def test_api_resident_plan_endpoint(tmp_path) -> None:
         assert payload["chosen_route"] == "resident_tier"
         assert payload["resident_savings_ratio"] > 0.7
         assert "resident_tier" in payload["candidates"]
+        assert payload["candidates"]["resident_tier"]["page_mode_counts"]["vector"] >= 0
 
         metrics = await client.get("/metrics")
         assert metrics.status_code == 200
         assert 'endpoint="resident_plan"' in metrics.text
         assert "hyperquant_last_projected_resident_ratio" in metrics.text
+
+    asyncio.run(_scenario_client(app, scenario))
+
+
+def test_api_vector_decompress_uses_server_policy_default(tmp_path, monkeypatch) -> None:
+    array = build_demo_array()
+    trainer = MiniBatchKMeansTrainer(CodebookConfig(chunk_size=32, codebook_size=32, sample_size=1024, training_iterations=4))
+    bundle = trainer.train(array)
+    bundle_path = tmp_path / "bundle.npz"
+    bundle.save(bundle_path)
+    monkeypatch.setattr(api_app, "VECTOR_PREFER_NATIVE_FWHT_DEFAULT", False)
+    app = create_app(bundle_path, max_request_bytes=4 * 1024 * 1024)
+    captured: list[bool] = []
+    original = api_app.VectorCodec.__init__
+
+    def tracked_init(self, *args, **kwargs):
+        captured.append(bool(kwargs["prefer_native_fwht"]))
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(api_app.VectorCodec, "__init__", tracked_init)
+    envelope, _ = VectorCodec(bits=3, group_size=128, rotation_seed=17, residual_topk=1, prefer_native_fwht=False).compress(array)
+
+    async def scenario(client: httpx.AsyncClient) -> None:
+        response = await client.post("/v1/vector/decompress", json={"envelope_b64": envelope.to_base64()})
+        assert response.status_code == 200
+        assert captured[-1] is False
 
     asyncio.run(_scenario_client(app, scenario))
 

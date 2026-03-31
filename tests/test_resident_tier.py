@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 import numpy as np
 
@@ -82,6 +84,39 @@ def test_tiered_store_detects_payload_tampering(tmp_path) -> None:
     reopened = ResidentTierStore.open(tmp_path / "store")
     with pytest.raises(ValueError, match="sha256 mismatch"):
         reopened.get_page(page.page_index)
+
+
+def test_resident_store_rejects_manifest_without_materialized_hash(tmp_path) -> None:
+    array = generate_mixed_long_context(n_tokens=512, dim=64, page_size=32, seed=20260329)
+    store_dir = tmp_path / "store"
+    ResidentTierStore.build(array, store_dir, config=ResidentTierConfig(page_size=32, group_size=64, hot_pages=2, residual_topk=1))
+    manifest_path = store_dir / "manifest.json"
+    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    page = next(item for item in payload["pages"] if item["mode"] != ResidentPageMode.PAGE_REF.value)
+    page["payload_sha256"] = None
+    manifest_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="materialized pages must include payload_sha256"):
+        ResidentTierStore.open(store_dir)
+
+
+def test_verify_integrity_reads_each_materialized_payload_once(tmp_path, monkeypatch) -> None:
+    array = generate_mixed_long_context(n_tokens=512, dim=64, page_size=32, seed=20260329)
+    store = ResidentTierStore.build(array, tmp_path / "store", config=ResidentTierConfig(page_size=32, group_size=64, hot_pages=2, residual_topk=1))
+    reopened = ResidentTierStore.open(tmp_path / "store")
+    expected_payloads = sum(1 for page in reopened.manifest.pages if page.mode != ResidentPageMode.PAGE_REF.value)
+    calls = 0
+    original = ResidentTierStore._read_verified_payload
+
+    def counted(self, descriptor):
+        nonlocal calls
+        calls += 1
+        return original(self, descriptor)
+
+    monkeypatch.setattr(ResidentTierStore, "_read_verified_payload", counted)
+    integrity = reopened.verify_integrity()
+    assert integrity["checked_payloads"] == expected_payloads
+    assert calls == expected_payloads
 
 
 def test_resident_planner_keeps_expected_context_qualification_errors(monkeypatch) -> None:

@@ -134,6 +134,7 @@ class ContextCompressionStatsModel(BaseModel):
 
 class ResidentPlanRequest(BaseModel):
     array_b64: str = Field(..., description="Base64-encoded .npy payload.")
+    protected_vector_indices: List[int] = Field(default_factory=list)
     concurrent_sessions: int = Field(default=RESIDENT_CONCURRENT_SESSIONS_DEFAULT, gt=0)
     active_window_tokens: int = Field(default=RESIDENT_ACTIVE_WINDOW_TOKENS_DEFAULT, gt=0)
     runtime_value_bytes: int = Field(default=RESIDENT_RUNTIME_VALUE_BYTES_DEFAULT, gt=0)
