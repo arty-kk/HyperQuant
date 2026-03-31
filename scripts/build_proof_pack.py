@@ -24,7 +24,19 @@ from hyperquant.live_data import (
 )
 from hyperquant.resident_tier import ResidentTierConfig, ResidentPlanner, run_resident_benchmark
 
-EVIDENCE_DIR = ROOT / "docs" / "evidence"
+DEFAULT_EVIDENCE_DIR = ROOT / "docs" / "evidence"
+
+
+def _display_path(path: Path, *, evidence_dir: Path | None = None) -> str:
+    try:
+        return path.relative_to(ROOT).as_posix()
+    except ValueError:
+        if evidence_dir is not None:
+            try:
+                return path.relative_to(evidence_dir).as_posix()
+            except ValueError:
+                pass
+        return path.as_posix()
 
 
 def _write_text(path: Path, content: str) -> None:
@@ -69,7 +81,7 @@ def _update_hash_manifest(evidence_dir: Path) -> Path:
             continue
         if path.name == "SHA256SUMS.txt":
             continue
-        rel = path.relative_to(ROOT).as_posix()
+        rel = _display_path(path, evidence_dir=evidence_dir)
         digest = hashlib.sha256(path.read_bytes()).hexdigest()
         lines.append(f"{digest}  {rel}")
     _write_text(hash_path, "\n".join(lines) + ("\n" if lines else ""))
@@ -84,6 +96,7 @@ def _build_capacity_example(
     active_window_tokens: int,
     budget_sessions: int,
     concurrent_sessions: int,
+    evidence_dir: Path,
 ) -> tuple[Path, Path]:
     workloads = {
         "online_vector_stream": generate_online_vector_stream(n_vectors=16384, dim=128),
@@ -120,8 +133,8 @@ def _build_capacity_example(
             "budget_bytes": budget_bytes,
             "plan": plan.to_dict(),
         }
-    json_path = EVIDENCE_DIR / "capacity-example.json"
-    md_path = EVIDENCE_DIR / "capacity-example.md"
+    json_path = evidence_dir / "capacity-example.json"
+    md_path = evidence_dir / "capacity-example.md"
     _write_json(json_path, report)
     _write_text(md_path, _render_capacity_markdown(report))
     return json_path, md_path
@@ -139,6 +152,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--active-window-tokens", type=int, default=256, help="Hot-window size used in memory planning.")
     parser.add_argument("--runtime-value-bytes", type=int, default=2, help="Runtime bytes per value for baseline memory modeling.")
     parser.add_argument(
+        "--output-dir",
+        default=str(DEFAULT_EVIDENCE_DIR),
+        help="Directory where evidence artifacts are written.",
+    )
+    parser.add_argument(
         "--prefer-native-fwht",
         default=True,
         action=argparse.BooleanOptionalAction,
@@ -146,7 +164,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
+    evidence_dir = Path(args.output_dir).resolve()
+    evidence_dir.mkdir(parents=True, exist_ok=True)
 
     if not args.skip_tests:
         subprocess.run([sys.executable, "-m", "pytest", "-q"], cwd=ROOT, check=True)
@@ -156,8 +175,8 @@ def main(argv: list[str] | None = None) -> int:
         warmup=args.warmup,
         prefer_native_fwht=args.prefer_native_fwht,
     )
-    route_json = EVIDENCE_DIR / "route-benchmark.json"
-    route_md = EVIDENCE_DIR / "route-benchmark.md"
+    route_json = evidence_dir / "route-benchmark.json"
+    route_md = evidence_dir / "route-benchmark.md"
     _write_text(route_json, route_benchmark.to_json() + "\n")
     _write_text(route_md, route_benchmark.to_markdown())
 
@@ -174,8 +193,8 @@ def main(argv: list[str] | None = None) -> int:
         runtime_value_bytes=args.runtime_value_bytes,
         slice_iterations=args.slice_iterations,
     )
-    memory_json = EVIDENCE_DIR / "resident-benchmark.json"
-    memory_md = EVIDENCE_DIR / "resident-benchmark.md"
+    memory_json = evidence_dir / "resident-benchmark.json"
+    memory_md = evidence_dir / "resident-benchmark.md"
     _write_text(memory_json, memory.to_json() + "\n")
     _write_text(memory_md, memory.to_markdown())
 
@@ -186,18 +205,19 @@ def main(argv: list[str] | None = None) -> int:
         active_window_tokens=args.active_window_tokens,
         budget_sessions=args.budget_sessions,
         concurrent_sessions=args.concurrent_sessions,
+        evidence_dir=evidence_dir,
     )
 
-    hash_manifest = _update_hash_manifest(EVIDENCE_DIR)
+    hash_manifest = _update_hash_manifest(evidence_dir)
 
     summary = {
-        "route_json": route_json.relative_to(ROOT).as_posix(),
-        "route_md": route_md.relative_to(ROOT).as_posix(),
-        "memory_json": memory_json.relative_to(ROOT).as_posix(),
-        "memory_md": memory_md.relative_to(ROOT).as_posix(),
-        "capacity_json": capacity_json.relative_to(ROOT).as_posix(),
-        "capacity_md": capacity_md.relative_to(ROOT).as_posix(),
-        "hash_manifest": hash_manifest.relative_to(ROOT).as_posix(),
+        "route_json": _display_path(route_json, evidence_dir=evidence_dir),
+        "route_md": _display_path(route_md, evidence_dir=evidence_dir),
+        "memory_json": _display_path(memory_json, evidence_dir=evidence_dir),
+        "memory_md": _display_path(memory_md, evidence_dir=evidence_dir),
+        "capacity_json": _display_path(capacity_json, evidence_dir=evidence_dir),
+        "capacity_md": _display_path(capacity_md, evidence_dir=evidence_dir),
+        "hash_manifest": _display_path(hash_manifest, evidence_dir=evidence_dir),
     }
     print(json.dumps(summary, indent=2, ensure_ascii=False))
     return 0

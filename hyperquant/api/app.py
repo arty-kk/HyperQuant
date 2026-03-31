@@ -21,6 +21,7 @@ from ..resident_tier import ResidentTierConfig, ResidentPlanner
 from ..telemetry import HyperQuantMetrics
 from ..vector_codec import VectorCodec, RotatedScalarEnvelope, native_fwht_status
 from ..utils import ndarray_from_b64, ndarray_to_b64
+from ..defaults import VECTOR_PREFER_NATIVE_FWHT_DEFAULT
 from .models import (
     CodebookCompressRequest,
     CodebookCompressResponse,
@@ -135,6 +136,7 @@ def create_app(
 
     resolved_max_concurrency = int(max_concurrency or max(2, min(32, os.cpu_count() or 2)))
     max_request_bytes = int(max_request_bytes)
+    server_prefer_native_fwht = bool(VECTOR_PREFER_NATIVE_FWHT_DEFAULT)
     max_http_body_bytes = int(max_request_bytes * 2 + DEFAULT_MAX_HTTP_BODY_OVERHEAD_BYTES)
     semaphore = asyncio.Semaphore(resolved_max_concurrency)
 
@@ -309,7 +311,14 @@ def create_app(
 
         def do_vector_decompress():
             envelope = RotatedScalarEnvelope.from_base64(request.envelope_b64, max_bytes=max_request_bytes)
-            vector = get_vector_compressor(envelope.bits, envelope.group_size, envelope.rotation_seed, envelope.residual_topk, True)
+            prefer_native_fwht = server_prefer_native_fwht and envelope.rotation_kind == "structured_fwht"
+            vector = get_vector_compressor(
+                envelope.bits,
+                envelope.group_size,
+                envelope.rotation_seed,
+                envelope.residual_topk,
+                prefer_native_fwht,
+            )
             return vector.decompress(envelope)
 
         try:
@@ -356,6 +365,7 @@ def create_app(
                 active_window_tokens=request.active_window_tokens,
                 runtime_value_bytes=request.runtime_value_bytes,
                 budget_bytes=request.budget_bytes,
+                protected_vector_indices=request.protected_vector_indices,
             )
 
         try:

@@ -38,6 +38,7 @@ from .defaults import (
 )
 from .guarantee import ContourViolation, GuaranteeMode, GuaranteeViolation
 from .context_codec import ContextCodecConfig, ContextCodec
+from .page_ops import hash_page, max_abs_error, protected_mask, quantize_page_int8, relative_rms, top_rank_factors
 from .vector_codec import VectorCodec
 from .utils import sha256_hex
 from .validation import ShapeLimits, validate_float_dtype, validate_numeric_finite_array, validate_shape
@@ -247,6 +248,8 @@ class ResidentTierManifest:
             else:
                 if page.file_name is None:
                     raise ValueError("materialized pages must have file_name")
+                if not page.payload_sha256:
+                    raise ValueError("materialized pages must include payload_sha256")
                 if page.ref_page_index != -1:
                     raise ValueError("non-reference pages must use ref_page_index=-1")
             total_vectors += page.length
@@ -441,7 +444,12 @@ class _TieredPageEncoder:
     ) -> _TieredBuildArtifacts:
         vectors, original_shape, original_dtype = self._flatten_vectors(array)
         n_vectors, dim = vectors.shape
-        protected_mask = self._context._protected_mask(n_vectors, protected_vector_indices)
+        protected_vector_mask = protected_mask(
+            n_vectors,
+            protected_vector_indices,
+            prefix_keep_vectors=self.config.prefix_keep_vectors,
+            suffix_keep_vectors=self.config.suffix_keep_vectors,
+        )
         page_size = self.config.page_size
         n_pages = math.ceil(n_vectors / page_size)
 
@@ -463,7 +471,7 @@ class _TieredPageEncoder:
         orig_sq = 0.0
         recon_sq = 0.0
         dot = 0.0
-        max_abs_error = 0.0
+        max_abs_error_total = 0.0
 
         for page_idx in range(n_pages):
             start = page_idx * page_size
@@ -472,16 +480,16 @@ class _TieredPageEncoder:
             core = vectors[start:end]
             page = np.zeros((page_size, dim), dtype=np.float32)
             page[:valid_length] = core
-            is_protected = bool(np.any(protected_mask[start:end]))
+            is_protected = bool(np.any(protected_vector_mask[start:end]))
             digest: bytes | None = None
             descriptor: ResidentPageDescriptor | None = None
             payload_bytes = b""
             reconstructed_page = np.zeros_like(page)
 
             if not is_protected and self.config.enable_page_ref:
-                digest = self._context._hash_page(page, valid_length, self.config.ref_round_decimals)
+                digest = hash_page(page, valid_length, self.config.ref_round_decimals)
                 for candidate_idx, candidate_page in digest_cache.get(digest, []):
-                    ref_rel_rms = self._context._relative_rms(page[:valid_length], candidate_page[:valid_length])
+                    ref_rel_rms = relative_rms(page[:valid_length], candidate_page[:valid_length])
                     if ref_rel_rms <= self.config.page_ref_rel_rms_threshold:
                         descriptor = ResidentPageDescriptor(
                             page_index=page_idx,
@@ -491,7 +499,7 @@ class _TieredPageEncoder:
                             file_name=None,
                             compressed_bytes=0,
                             rel_rms_error=ref_rel_rms,
-                            max_abs_error=self._context._max_abs_error(page[:valid_length], candidate_page[:valid_length]),
+                            max_abs_error=max_abs_error(page[:valid_length], candidate_page[:valid_length]),
                             payload_sha256=None,
                         )
                         reconstructed_page[:valid_length] = candidate_page[:valid_length]
@@ -501,9 +509,9 @@ class _TieredPageEncoder:
             if descriptor is None and not is_protected:
                 mean = page[:valid_length].mean(axis=0)
                 centered = page[:valid_length] - mean[None, :]
-                us, vt = self._context._top_rank_factors(centered, self.config.rank)
+                us, vt = top_rank_factors(centered, self.config.rank)
                 approx_core = mean[None, :] + us @ vt
-                rel_rms = self._context._relative_rms(page[:valid_length], approx_core)
+                rel_rms = relative_rms(page[:valid_length], approx_core)
                 if rel_rms <= self.config.low_rank_error_threshold:
                     mean_fp16 = mean.astype(np.float16)
                     us_fp16 = us.astype(np.float16)
@@ -520,12 +528,12 @@ class _TieredPageEncoder:
                         file_name=file_name,
                         compressed_bytes=len(payload_bytes),
                         rel_rms_error=rel_rms,
-                        max_abs_error=self._context._max_abs_error(page[:valid_length], approx_core),
+                        max_abs_error=max_abs_error(page[:valid_length], approx_core),
                         payload_sha256=sha256_hex(payload_bytes),
                     )
 
             if descriptor is None and self.config.enable_int8_fallback and (not is_protected or self.config.try_int8_for_protected):
-                mins_fp16, scales_fp16, q_page, recon_page, rel_rms, max_abs = self._context._quantize_page_int8(page, valid_length, page_size)
+                mins_fp16, scales_fp16, q_page, recon_page, rel_rms, max_abs = quantize_page_int8(page, valid_length, page_size)
                 if rel_rms <= self.config.int8_rel_rms_threshold and max_abs <= self.config.int8_max_abs_threshold:
                     payload_bytes = self._serialize_npz(
                         mins=mins_fp16,
@@ -561,7 +569,7 @@ class _TieredPageEncoder:
                     length=valid_length,
                     file_name=file_name,
                     compressed_bytes=len(payload_bytes),
-                    rel_rms_error=self._context._relative_rms(page[:valid_length], restored_core),
+                    rel_rms_error=relative_rms(page[:valid_length], restored_core),
                     max_abs_error=float(np.max(np.abs(page[:valid_length] - restored_core))),
                     payload_sha256=sha256_hex(payload_bytes),
                 )
@@ -579,7 +587,7 @@ class _TieredPageEncoder:
                     length=valid_length,
                     file_name=file_name,
                     compressed_bytes=len(payload_bytes),
-                    rel_rms_error=self._context._relative_rms(page[:valid_length], reconstructed_page[:valid_length]),
+                    rel_rms_error=relative_rms(page[:valid_length], reconstructed_page[:valid_length]),
                     max_abs_error=float(np.max(np.abs(page[:valid_length] - reconstructed_page[:valid_length]))),
                     payload_sha256=sha256_hex(payload_bytes),
                 )
@@ -598,7 +606,7 @@ class _TieredPageEncoder:
             orig_sq += float(np.sum(reference * reference))
             recon_sq += float(np.sum(reconstructed * reconstructed))
             dot += float(np.sum(reference * reconstructed))
-            max_abs_error = max(max_abs_error, float(np.max(np.abs(diff))))
+            max_abs_error_total = max(max_abs_error_total, float(np.max(np.abs(diff))))
 
             if digest is not None and descriptor.mode != ResidentPageMode.PAGE_REF.value:
                 digest_cache.setdefault(digest, []).append((page_idx, reconstructed_page.copy()))
@@ -616,7 +624,7 @@ class _TieredPageEncoder:
                 manifest_bytes=0,
                 compression_ratio=float(original_bytes / max(payload_bytes_total, 1)),
                 rms_error=float(math.sqrt(sum_sq_diff / max(vectors.size, 1))),
-                max_abs_error=max_abs_error,
+                max_abs_error=max_abs_error_total,
                 cosine_similarity=float(dot / max(math.sqrt(orig_sq * recon_sq), 1e-12)),
                 page_mode_counts=mode_counts,
                 unique_materialized_pages=unique_materialized_pages,
@@ -633,7 +641,7 @@ class _TieredPageEncoder:
             manifest_bytes=manifest_bytes,
             compression_ratio=float(original_bytes / max(final_artifact_bytes, 1)),
             rms_error=float(math.sqrt(sum_sq_diff / max(vectors.size, 1))),
-            max_abs_error=max_abs_error,
+            max_abs_error=max_abs_error_total,
             cosine_similarity=float(dot / max(math.sqrt(orig_sq * recon_sq), 1e-12)),
             page_mode_counts=mode_counts,
             unique_materialized_pages=unique_materialized_pages,
@@ -735,14 +743,51 @@ class ResidentTierStore:
     def _read_verified_payload(self, descriptor: ResidentPageDescriptor) -> bytes:
         if descriptor.file_name is None:
             raise ValueError("descriptor does not reference a payload file")
+        if not descriptor.payload_sha256:
+            raise ValueError(f"missing payload_sha256 for page {descriptor.page_index}")
         payload = (self.base_dir / descriptor.file_name).read_bytes()
-        if descriptor.payload_sha256:
-            actual = sha256_hex(payload)
-            if actual != descriptor.payload_sha256:
-                raise ValueError(
-                    f"sha256 mismatch for page {descriptor.page_index}: expected {descriptor.payload_sha256}, got {actual}"
-                )
+        actual = sha256_hex(payload)
+        if actual != descriptor.payload_sha256:
+            raise ValueError(
+                f"sha256 mismatch for page {descriptor.page_index}: expected {descriptor.payload_sha256}, got {actual}"
+            )
         return payload
+
+    def _decode_page(self, descriptor: ResidentPageDescriptor) -> np.ndarray:
+        dim = int(self.manifest.original_shape[-1])
+        page = np.zeros((self.manifest.config.page_size, dim), dtype=np.float32)
+        length = descriptor.length
+        if descriptor.mode == ResidentPageMode.PAGE_REF.value:
+            ref_page = self.get_page(descriptor.ref_page_index)
+            page[:length] = ref_page[:length]
+            return page
+
+        payload = self._read_verified_payload(descriptor)
+        if descriptor.mode == ResidentPageMode.LOW_RANK.value:
+            with np.load(io.BytesIO(payload), allow_pickle=False) as data:
+                mean = data["mean"].astype(np.float32)
+                us = data["us"].astype(np.float32)
+                vt = data["vt"].astype(np.float32)
+            page[:length] = mean[None, :] + us[:length] @ vt
+        elif descriptor.mode == ResidentPageMode.INT8.value:
+            with np.load(io.BytesIO(payload), allow_pickle=False) as data:
+                mins = data["mins"].astype(np.float32)
+                scales = data["scales"].astype(np.float32)
+                q = data["q"].astype(np.float32)
+            page[:length] = q * scales[None, :] + mins[None, :]
+        elif descriptor.mode == ResidentPageMode.VECTOR.value:
+            from .vector_codec import RotatedScalarEnvelope
+
+            envelope = RotatedScalarEnvelope.from_bytes(payload)
+            restored = self._vector.decompress(envelope).astype(np.float32, copy=False)
+            page[:length] = restored[:length]
+        elif descriptor.mode == ResidentPageMode.FP16.value:
+            with np.load(io.BytesIO(payload), allow_pickle=False) as data:
+                restored = data["page"].astype(np.float32)
+            page[:length] = restored[:length]
+        else:
+            raise ValueError(f"unsupported page mode: {descriptor.mode}")
+        return page
 
     def verify_integrity(self) -> dict[str, object]:
         self.evict_all()
@@ -750,7 +795,6 @@ class ResidentTierStore:
         checked_payloads = 0
         for descriptor in self.manifest.pages:
             if descriptor.mode != ResidentPageMode.PAGE_REF.value:
-                self._read_verified_payload(descriptor)
                 checked_payloads += 1
             self.get_page(descriptor.page_index)
             checked_pages += 1
@@ -770,42 +814,7 @@ class ResidentTierStore:
             return cached.copy()
 
         descriptor = self.manifest.pages[page_idx]
-        dim = int(self.manifest.original_shape[-1])
-        page = np.zeros((self.manifest.config.page_size, dim), dtype=np.float32)
-        length = descriptor.length
-
-        if descriptor.mode == ResidentPageMode.PAGE_REF.value:
-            ref_page = self.get_page(descriptor.ref_page_index)
-            page[:length] = ref_page[:length]
-        elif descriptor.mode == ResidentPageMode.LOW_RANK.value:
-            payload = self._read_verified_payload(descriptor)
-            with np.load(io.BytesIO(payload), allow_pickle=False) as data:
-                mean = data["mean"].astype(np.float32)
-                us = data["us"].astype(np.float32)
-                vt = data["vt"].astype(np.float32)
-            page[:length] = mean[None, :] + us[:length] @ vt
-        elif descriptor.mode == ResidentPageMode.INT8.value:
-            payload = self._read_verified_payload(descriptor)
-            with np.load(io.BytesIO(payload), allow_pickle=False) as data:
-                mins = data["mins"].astype(np.float32)
-                scales = data["scales"].astype(np.float32)
-                q = data["q"].astype(np.float32)
-            page[:length] = q * scales[None, :] + mins[None, :]
-        elif descriptor.mode == ResidentPageMode.VECTOR.value:
-            payload = self._read_verified_payload(descriptor)
-            from .vector_codec import RotatedScalarEnvelope
-
-            envelope = RotatedScalarEnvelope.from_bytes(payload)
-            restored = self._vector.decompress(envelope).astype(np.float32, copy=False)
-            page[:length] = restored[:length]
-        elif descriptor.mode == ResidentPageMode.FP16.value:
-            payload = self._read_verified_payload(descriptor)
-            with np.load(io.BytesIO(payload), allow_pickle=False) as data:
-                restored = data["page"].astype(np.float32)
-            page[:length] = restored[:length]
-        else:
-            raise ValueError(f"unsupported page mode: {descriptor.mode}")
-
+        page = self._decode_page(descriptor)
         return self._remember(page_idx, page).copy()
 
     def get_slice(self, start_vector: int, end_vector: int) -> np.ndarray:

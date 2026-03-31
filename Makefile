@@ -1,6 +1,7 @@
 PYTHON ?= python
+CI_CHECK_PROOF_PACK ?= 1
 
-.PHONY: install test serve codebook-benchmark context-benchmark vector-benchmark dense-baseline-benchmark route-benchmark resident-benchmark native proof-pack
+.PHONY: install test ci-check serve codebook-benchmark context-benchmark vector-benchmark dense-baseline-benchmark route-benchmark resident-benchmark native proof-pack
 
 install:
 	$(PYTHON) -m pip install -e .[dev]
@@ -10,6 +11,17 @@ native:
 
 test:
 	pytest -q
+
+ci-check:
+	$(PYTHON) -m compileall hyperquant
+	$(MAKE) native
+	$(MAKE) test
+	$(PYTHON) -m build
+	@if [ "$(CI_CHECK_PROOF_PACK)" = "1" ]; then \
+		tmp_dir="$$(mktemp -d)"; \
+		$(PYTHON) scripts/build_proof_pack.py --skip-tests --iterations 1 --warmup 0 --slice-iterations 1 --output-dir "$$tmp_dir/evidence"; \
+		rm -rf "$$tmp_dir"; \
+	fi
 
 serve:
 	hyperquant serve --bundle bundle.npz --host 0.0.0.0 --port 8080

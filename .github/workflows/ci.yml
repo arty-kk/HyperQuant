@@ -20,19 +20,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e .[dev,release]
-      - name: Compile
-        run: python -m compileall hyperquant
-      - name: Native FWHT smoke test
-        run: |
-          python - <<'PY'
-          from hyperquant.native_core import build_native_fwht
-          print(build_native_fwht(force=True))
-          PY
-      - name: Test
-        run: pytest -q
-      - name: Build distributions
-        run: python -m build
-      - name: Proof pack smoke test
-        if: matrix.python-version == '3.11'
-        run: |
-          python scripts/build_proof_pack.py --skip-tests --iterations 1 --warmup 0 --slice-iterations 1
+      - name: CI checks
+        env:
+          CI_CHECK_PROOF_PACK: ${{ matrix.python-version == '3.11' && '1' || '0' }}
+        run: make ci-check
