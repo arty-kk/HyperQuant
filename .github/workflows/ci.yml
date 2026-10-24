@@ -1,18 +1,22 @@
 name: ci
 
 on:
+  workflow_dispatch:
   push:
   pull_request:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted","Linux","X64","a3d-linux-x64"]') || 'ubuntu-latest' }}
+    timeout-minutes: 360
     strategy:
       fail-fast: false
       matrix:
         python-version: ['3.10', '3.11', '3.12']
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
